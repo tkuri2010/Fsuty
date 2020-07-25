@@ -7,7 +7,7 @@ namespace Tkuri2010.Fsuty.Xmp
 {
     class Program
     {
-        static async Task Main(string[] args)
+        static void Main(string[] args)
         {
 			Xmp1(args);
         }
