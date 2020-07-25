@@ -48,7 +48,7 @@ namespace Tkuri2010.Fsuty.Xmp
 				if (e.Event == FsentryEvent.EnterDir)
 				{
 					Console.WriteLine($"ENTER: {e.Path}");
-					
+
 					// you can do this:
 					// if (ShouldSkip(e.Path))
 					// {
