@@ -8,7 +8,7 @@
 			"name": ".NET Core Launch (console)",
 			"type": "coreclr",
 			"request": "launch",
-			/* "preLaunchTask": "build", */
+			"preLaunchTask": "build",
 			"program": "${workspaceFolder}/src/Tkuri2010.Fsuty.Xmp/bin/Debug/netcoreapp3.1/Tkuri2010.Fsuty.Xmp.dll",
 			"args": [],
 			"cwd": "${workspaceFolder}/src/Tkuri2010.Fsuty.Xmp",

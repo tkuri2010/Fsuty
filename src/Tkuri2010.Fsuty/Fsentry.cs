@@ -17,7 +17,7 @@ namespace Tkuri2010.Fsuty
 		LeaveDir,
 	}
 
-	public enum FentryCommand
+	public enum FsentryCommand
 	{
 		Continue,
 
@@ -52,7 +52,7 @@ namespace Tkuri2010.Fsuty
 
 				q.PushLeavingDir(entry.Path);
 
-				if (entry.Command == FentryCommand.Continue)
+				if (entry.Command == FsentryCommand.Continue)
 				{
 					await q.EnumAndPushAsync(entry.Path, ct);
 				}
@@ -68,7 +68,7 @@ namespace Tkuri2010.Fsuty
 
 		public string Path { get; private set; }
 
-		public FentryCommand Command  { get; set; } = FentryCommand.Continue;
+		public FsentryCommand Command  { get; set; } = FsentryCommand.Continue;
 
 		internal Fsentry(FsentryEvent ev, string rawResultPathString)
 		{
