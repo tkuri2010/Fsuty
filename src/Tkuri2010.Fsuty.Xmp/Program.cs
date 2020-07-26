@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -67,5 +69,38 @@ namespace Tkuri2010.Fsuty.Xmp
 				}
 			}
 		}
+
+
+#if false
+		[DllImport("shlwapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
+		private static extern bool PathCanonicalize(
+				[Out] StringBuilder lpszDest,
+				string lpszSrc);
+
+		static void Try_PathCanonicalize(string input)
+		{
+			var buf = new StringBuilder(256);
+			PathCanonicalize(buf, input);
+			Console.WriteLine(buf);
+		}
+
+		static void Try_PathCanonicalize()
+		{
+			//Try_PathCanonicalize( @".\..\dir\...\xxx\..\file.txt"); //=> @"dir\...\file.txt"
+			//Try_PathCanonicalize( @"" );       //=> @"\"
+			//Try_PathCanonicalize( @"." );      //=> @"\"
+			//Try_PathCanonicalize( @".." );     //=> @"\"
+			//Try_PathCanonicalize( @"./.\." );  //=> @"./"
+			  Try_PathCanonicalize( @".a.\." );  //=> @".a"
+			//Try_PathCanonicalize( @".\./." );  //=> @"./"
+			//Try_PathCanonicalize( @"./" );     //=> @"./"
+			//Try_PathCanonicalize( @".\" );     //=> @"\"
+			//Try_PathCanonicalize( @"c:." );    //=> @"c:\"
+			//Try_PathCanonicalize( @"a.." );    //=> @"a"
+			//Try_PathCanonicalize( @"..a" );    //=> @"..a"
+			//Try_PathCanonicalize( @"a..b" );   //=> @"a..b"
+		}
+#endif
+
     }
 }

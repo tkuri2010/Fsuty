@@ -152,32 +152,44 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_DosDevice_1()
 		{
-			var path = Filepath.Parse(@"\\.\foo\bar\baz");
+			Action<string> test_ = pathStr =>
+			{
+				var path = Filepath.Parse(pathStr);
 
-			var prefix = path.Prefix as DosDevice;
-			Assert.IsNotNull(prefix);
-			Assert.IsFalse(prefix!.IsUnc);
-			Assert.IsTrue(prefix!.Server == null);
-			Assert.AreEqual("foo", prefix.Volume);
-			Assert.AreEqual(2, path.Items.Length);
-			Assert.AreEqual("bar", path.Items[0]);
-			Assert.AreEqual("baz", path.Items[1]);
+				var prefix = path.Prefix as DosDevice;
+				Assert.IsNotNull(prefix);
+				Assert.IsFalse(prefix!.IsUnc);
+				Assert.IsTrue(prefix!.Server == null);
+				Assert.AreEqual("foo", prefix.Volume);
+				Assert.AreEqual(2, path.Items.Length);
+				Assert.AreEqual("bar", path.Items[0]);
+				Assert.AreEqual("baz", path.Items[1]);
+			};
+
+			test_(@"\\.\foo\bar\baz");
+			test_(@"\\?\foo\bar\baz");
 		}
 
 
 		[TestMethod]
 		public void Test_DosDevice_2_UNC()
 		{
-			var path = Filepath.Parse(@"\\.\UNC\foo\bar\baz");
+			Action<string> test_ = pathStr =>
+			{
+				var path = Filepath.Parse(pathStr);
 
-			var prefix = path.Prefix as DosDevice;
-			Assert.IsNotNull(prefix);
-			Assert.IsTrue(prefix!.IsUnc);
-			Assert.AreEqual("foo", prefix!.Server);
-			Assert.AreEqual("bar", prefix!.Share);
-			Assert.AreEqual(@"foo\bar", prefix.Volume);
-			Assert.AreEqual(1, path.Items.Length);
-			Assert.AreEqual("baz", path.Items[0]);
+				var prefix = path.Prefix as DosDevice;
+				Assert.IsNotNull(prefix);
+				Assert.IsTrue(prefix!.IsUnc);
+				Assert.AreEqual("foo", prefix!.Server);
+				Assert.AreEqual("bar", prefix!.Share);
+				Assert.AreEqual(@"foo\bar", prefix.Volume);
+				Assert.AreEqual(1, path.Items.Length);
+				Assert.AreEqual("baz", path.Items[0]);
+			};
+
+			test_(@"\\.\UNC\foo\bar\baz");
+			test_(@"\\?\UNC\foo\bar\baz");
 		}
 
 
@@ -489,22 +501,6 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.AreEqual("foo", path.ToString("/"));
 			}
 		}
-
-
-#if false
-		[DllImport("shlwapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
-		private static extern bool PathCanonicalize(
-				[Out] StringBuilder lpszDest,
-				string lpszSrc);
-
-		[TestMethod]
-		public void Try_PathCanonicalize()
-		{
-			var buf = new StringBuilder(256);
-			PathCanonicalize(buf, @".\..\dir\...\xxx\..\file.txt");
-			Assert.AreEqual(@"dir\...\file.txt", buf.ToString());
-		}
-#endif
 
 
 		[TestMethod]
