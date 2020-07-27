@@ -69,6 +69,14 @@ namespace Tkuri2010.Fsuty
 			{
 				return traDos!;
 			}
+			else if (PathPrefix.DosDeviceUnc.TryParse(aScan, out var pxDosDecUnc))
+			{
+				return pxDosDecUnc!;
+			}
+			else if (PathPrefix.DosDeviceDrive.TryParse(aScan, out var pxDosDevDrive))
+			{
+				return pxDosDevDrive!;
+			}
 			else if (PathPrefix.DosDevice.TryParse(aScan, out var pxDosDev))
 			{
 				return pxDosDev!;
@@ -379,12 +387,50 @@ namespace Tkuri2010.Fsuty.PathPrefix
 	}
 
 
+	public interface IDosDevice : IPathPrefix
+	{
+		string SignChar { get; }
+
+		string Volume { get; }
+	}
+
+
+	public interface IHasDrive : IPathPrefix
+	{
+		/// <summary>
+		/// ドライブ名。"C:" などコロン付き
+		/// </summary>
+		/// <value></value>
+		string Drive { get; }
+
+		/// <summary>
+		/// ドライブ文字
+		/// </summary>
+		/// <value></value>
+		string DriveLetter { get; }
+	}
+
+
+	public interface IShared
+	{
+		/// <summary>
+		/// サーバ
+		/// </summary>
+		/// <value></value>
+		string Server { get; }
+
+		/// <summary>
+		/// 共有名
+		/// </summary>
+		/// <value></value>
+		string Share { get; }
+	}
+
+
 	/// <summary>
-	/// "\\.\VOLUME{ASDFASDF}\foo\bar.txt"
-	/// "\\?\C$\foo\bar.txt"
-	/// "\\?\UNC\server\share-name\foo\bar.txt"
+	/// - "\\.\VOLUME{ASDFASDF}\foo\bar.txt"
 	/// </summary>
-	public class DosDevice : IPathPrefix
+	public class DosDevice : IDosDevice
 	{
 		/// <summary>
 		/// matches "//./", "//?/"
@@ -393,16 +439,7 @@ namespace Tkuri2010.Fsuty.PathPrefix
 
 
 		/// <summary>
-		/// matches "/UNC", "/UNC/server", "/UNC/server/share-name"
-		/// </summary>
-		public static readonly Regex UNC_PATTERN = new Regex(
-				@"^/+UNC (/+ ([^/]+) (/+ ([^/]+) )? )?"
-				.Replace(" ", "")
-				);
-
-
-		/// <summary>
-		/// matches "/volume-string", "/C$"
+		/// matches "/volume-string", "/C:"   ~~"/C$"~~ ←これは勘違い
 		/// </summary>
 		public static readonly Regex VOLUME_PATTERN = new Regex(@"^/+([^/]+)");
 
@@ -419,15 +456,7 @@ namespace Tkuri2010.Fsuty.PathPrefix
 			oResult = new DosDevice();
 			oResult.SignChar = match.Groups[1].Value;
 
-			if (aScan.Skip(UNC_PATTERN, out var asUnc))
-			{
-				// \\.\UNC\serever\share-name\....
-				oResult.IsUnc = true;
-				oResult.Server = asUnc.Groups[2].Value;
-				oResult.Share = asUnc.Groups[4].Value;
-				oResult.Volume = oResult.Server + asUnc.Groups[3].Value.Replace('/', System.IO.Path.DirectorySeparatorChar);
-			}
-			else if (aScan.Skip(VOLUME_PATTERN, out var volumePart))
+			if (aScan.Skip(VOLUME_PATTERN, out var volumePart))
 			{
 				// \\.\some-volume\...
 				oResult.Volume = volumePart.Groups[1].Value;
@@ -441,44 +470,159 @@ namespace Tkuri2010.Fsuty.PathPrefix
 		/// 「.」または「?」
 		/// </summary>
 		/// <value></value>
-		public string SignChar { get; private set; } = "";
+		public string SignChar { get; private set; } = string.Empty;
 
 
 		/// <summary>
-		/// UNCの場合true
+		/// ボリューム文字列。"VOLUME{ASDFASDF}"など
 		/// </summary>
 		/// <value></value>
-		public bool IsUnc { get; private set; }
-
-
-		/// <summary>
-		/// サーバ名。UNCの場合のみ存在。「LOCALHOST」など。
-		/// </summary>
-		/// <value></value>
-		public string? Server { get; private set; }
-
-
-		/// <summary>
-		/// 共有名。UNCの場合のみ存在。「C$」「shared」など。
-		/// </summary>
-		/// <value></value>
-		public string? Share { get; private set; }
-
-
-		/// <summary>
-		/// UNCの場合は Server\Share のような文字列。
-		/// そうでない場合はボリュームまたはドライブ(「C:」など)
-		/// </summary>
-		/// <value></value>
-		public string Volume { get; private set; } = "";
+		public string Volume { get; private set; } = string.Empty;
 
 
 		override public string ToString()
-			=> IsUnc ? $@"\\{SignChar}\UNC\{Volume}" : $@"\\{SignChar}\{Volume}";
+			=> $@"\\{SignChar}\{Volume}";
 	}
 
 
-	public class Unc : IPathPrefix
+	/// <summary>
+	/// - "\\?\C:\foo\bar.txt"
+	/// - "//?/C:/foo/bar.txt" (forward slash allowed)
+	/// - ~~"\\?\C$\foo\bar.txt"~~  これは違う。何か勘違いしていた？
+	/// </summary>
+	public class DosDeviceDrive : IDosDevice, IHasDrive
+	{
+		/// <summary>
+		/// matches "//./C:", "//?/R:"
+		/// </summary>
+		public static readonly Regex PREFIX_PATTERN = new Regex(
+			 	(@"^//(\.|\?)"
+					+ @"/(([a-zA-Z])" + Filepath.MSDOS_VOLUME_SEPARATOR_CHAR + ")")
+				.Replace(" ", ""));
+
+
+		public static bool TryParse(FilepathScanner aScan, out DosDeviceDrive? oResult)
+		{
+			oResult = null;
+
+			if (! aScan.Skip(PREFIX_PATTERN, out var match))
+			{
+				return false;
+			}
+
+			oResult = new DosDeviceDrive
+			{
+				SignChar = match.Groups[1].Value,
+				Drive = match.Groups[2].Value,
+				DriveLetter = match.Groups[3].Value,
+			};
+
+			return true;
+		}
+
+
+		/// <summary>
+		/// 「.」または「?」
+		/// </summary>
+		/// <value></value>
+		public string SignChar { get; private set; } = string.Empty;
+
+
+		/// <summary>
+		/// drive ("C:" , "Z:", and so on....)
+		/// </summary>
+		/// <value></value>
+		public string Drive { get; private set; } = string.Empty;
+
+
+		/// <summary>
+		/// drive letter
+		/// </summary>
+		/// <value></value>
+		public string DriveLetter { get; private set; } = string.Empty;
+
+
+		/// <summary>
+		/// ドライブ指定のパスにおける「ボリューム」とは、"C:" など
+		/// </summary>
+		/// <value></value>
+		public string Volume => Drive;
+
+
+		/// <summary>
+		/// "\\.\" + drive (or volume) + volume separator
+		/// </summary>
+		/// <returns></returns>
+		override public string ToString() => $@"\\{SignChar}\{Drive}";
+	}
+
+
+	/// <summary>
+	/// - "\\?\UNC\server\share-name\foo\bar.txt"
+	/// - "//?\UNC/127.0.0.1/share-name/foo/bar.txt" (forward slash allowed)
+	/// </summary>
+	public class DosDeviceUnc : IDosDevice, IShared
+	{
+		/// <summary>
+		/// matches "//./UNC", "//./UNC/server", "//?/UNC/server/share-name"
+		/// </summary>
+		public static readonly Regex UNC_PATTERN = new Regex(
+				@"^//(\.|\?)/UNC (/+ (W+) (/+ (W+) )? )?"
+				.Replace("W", "[^/]")
+				.Replace(" ", "")
+				);
+
+
+		public static bool TryParse(FilepathScanner aScan, out DosDeviceUnc? oResult)
+		{
+			oResult = null;
+
+			if (! aScan.Skip(UNC_PATTERN, out var asUnc))
+			{
+				return false;
+			}
+
+			oResult = new DosDeviceUnc
+			{
+				SignChar = asUnc.Groups[1].Value,
+				Server = asUnc.Groups[3].Value,
+				Share = asUnc.Groups[5].Value,
+			};
+			oResult.Volume = oResult.Server + asUnc.Groups[4].Value.Replace('/', System.IO.Path.DirectorySeparatorChar);
+			return true;
+		}
+
+
+		/// <summary>
+		/// 「.」または「?」
+		/// </summary>
+		/// <value></value>
+		public string SignChar { get; private set; } = string.Empty;
+
+		/// <summary>
+		/// サーバ
+		/// </summary>
+		/// <value></value>
+		public string Server { get; private set; } = string.Empty;
+
+		/// <summary>
+		/// 共有名
+		/// </summary>
+		/// <value></value>
+		public string Share { get; private set; } = string.Empty;
+
+		/// <summary>
+		///  UNC におけるボリュームは、 "Server\ShareName" のような文字列
+		/// </summary>
+		/// <value></value>
+		public string Volume { get; private set; } = string.Empty;
+
+		override public string ToString()
+			=> $@"\\{SignChar}\UNC\{Volume}";
+	}
+
+
+	public class Unc : IPathPrefix, IShared
 	{
 		/// <summary>
 		/// matches "//server/share-name"
@@ -503,17 +647,17 @@ namespace Tkuri2010.Fsuty.PathPrefix
 
 
 		/// <summary>
-		/// サーバ名。UNCの場合のみ存在。「LOCALHOST」など。
+		/// サーバ名。「LOCALHOST」など。
 		/// </summary>
 		/// <value></value>
-		public string? Server { get; private set; }
+		public string Server { get; private set; } = string.Empty;
 
 
 		/// <summary>
-		/// 共有名。UNCの場合のみ存在。「C$」「shared」など。
+		/// 共有名。「C$」「shared」など。
 		/// </summary>
 		/// <value></value>
-		public string? Share { get; private set; }
+		public string Share { get; private set; } = string.Empty;
 
 
 		override public string ToString()
@@ -525,7 +669,7 @@ namespace Tkuri2010.Fsuty.PathPrefix
 	/// <summary>
 	/// Traditional DOS
 	/// </summary>
-	public class Dos : IPathPrefix
+	public class Dos : IHasDrive
 	{
 		/// <summary>
 		/// matches "c:", "G:" etc...
@@ -557,14 +701,14 @@ namespace Tkuri2010.Fsuty.PathPrefix
 		/// drive ("C:" , "Z:", and so on....)
 		/// </summary>
 		/// <value></value>
-		public string Drive { get; private set; } = "";
+		public string Drive { get; private set; } = string.Empty;
 
 
 		/// <summary>
 		/// drive letter
 		/// </summary>
 		/// <value></value>
-		public string DriveLetter { get; private set; } = "";
+		public string DriveLetter { get; private set; } = string.Empty;
 
 
 		/// <summary>
