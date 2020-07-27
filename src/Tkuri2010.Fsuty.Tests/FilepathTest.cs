@@ -158,9 +158,7 @@ namespace Tkuri2010.Fsuty.Tests
 
 				var prefix = path.Prefix as DosDevice;
 				Assert.IsNotNull(prefix);
-				Assert.IsFalse(prefix!.IsUnc);
-				Assert.IsTrue(prefix!.Server == null);
-				Assert.AreEqual("foo", prefix.Volume);
+				Assert.AreEqual("foo", prefix!.Volume);
 				Assert.AreEqual(2, path.Items.Length);
 				Assert.AreEqual("bar", path.Items[0]);
 				Assert.AreEqual("baz", path.Items[1]);
@@ -168,6 +166,32 @@ namespace Tkuri2010.Fsuty.Tests
 
 			test_(@"\\.\foo\bar\baz");
 			test_(@"\\?\foo\bar\baz");
+			test_(@"//./foo/bar/baz");
+			test_(@"//?/foo/bar/baz");
+		}
+
+
+		[TestMethod]
+		public void Test_DosDevice_2_Drive()
+		{
+			Action<string> test_ = pathStr =>
+			{
+				var path = Filepath.Parse(pathStr);
+
+				var prefix = path.Prefix as DosDeviceDrive;
+				Assert.IsNotNull(prefix);
+				Assert.AreEqual("C", prefix!.DriveLetter);
+				Assert.AreEqual("C:", prefix!.Drive);
+				Assert.AreEqual("C:", prefix!.Volume);
+				Assert.AreEqual(2, path.Items.Length);
+				Assert.AreEqual("bar", path.Items[0]);
+				Assert.AreEqual("baz", path.Items[1]);
+			};
+
+			test_(@"\\.\C:\bar\baz");
+			test_(@"\\?\C:\bar\baz");
+			test_(@"//./C:/bar/baz");
+			test_(@"//?/C:/bar/baz");
 		}
 
 
@@ -178,9 +202,8 @@ namespace Tkuri2010.Fsuty.Tests
 			{
 				var path = Filepath.Parse(pathStr);
 
-				var prefix = path.Prefix as DosDevice;
+				var prefix = path.Prefix as DosDeviceUnc;
 				Assert.IsNotNull(prefix);
-				Assert.IsTrue(prefix!.IsUnc);
 				Assert.AreEqual("foo", prefix!.Server);
 				Assert.AreEqual("bar", prefix!.Share);
 				Assert.AreEqual(@"foo\bar", prefix.Volume);
@@ -541,7 +564,22 @@ namespace Tkuri2010.Fsuty.Tests
 			var scan = new FilepathScanner(src);
 
 			Assert.IsTrue(DosDevice.TryParse(scan, out var prefix));
-			Assert.IsFalse(prefix!.IsUnc);
+		}
+
+
+		[TestMethod]
+		public void Test_PrefixDosDevice_Drive_1()
+		{
+			Action<string> test_ = srcStr =>
+			{
+				var scan = new FilepathScanner(srcStr);
+				Assert.IsTrue(DosDeviceDrive.TryParse(scan, out var prefix));
+			};
+
+			test_(@"\\.\C:");
+			test_(@"\\.\C:");
+			test_(@"//?/C:");
+			test_(@"//?/C:");
 		}
 
 
@@ -551,11 +589,7 @@ namespace Tkuri2010.Fsuty.Tests
 			var src = @"\\.\UNC";
 			var scan = new FilepathScanner(src);
 
-			Assert.IsTrue(DosDevice.TryParse(scan, out var prefix));
-			Assert.IsTrue(prefix!.IsUnc);
-			//Assert.AreEqual(@"127.0.0.1", prefix.Server);
-			//Assert.IsTrue(string.IsNullOrEmpty(prefix.Share));
-			//Assert.AreEqual(@"127.0.0.1", prefix.Volume);
+			Assert.IsTrue(DosDeviceUnc.TryParse(scan, out var prefix));
 		}
 
 
@@ -565,8 +599,7 @@ namespace Tkuri2010.Fsuty.Tests
 			var src = @"\\.\UNC\127.0.0.1";
 			var scan = new FilepathScanner(src);
 
-			Assert.IsTrue(DosDevice.TryParse(scan, out var prefix));
-			Assert.IsTrue(prefix!.IsUnc);
+			Assert.IsTrue(DosDeviceUnc.TryParse(scan, out var prefix));
 			Assert.AreEqual(@"127.0.0.1", prefix!.Server);
 			Assert.IsTrue(string.IsNullOrEmpty(prefix!.Share));
 			Assert.AreEqual(@"127.0.0.1", prefix!.Volume);
@@ -579,8 +612,7 @@ namespace Tkuri2010.Fsuty.Tests
 			var src = @"\\?\UNC\127.0.0.1\share-name";
 			var scan = new FilepathScanner(src);
 
-			Assert.IsTrue(DosDevice.TryParse(scan, out var prefix));
-			Assert.IsTrue(prefix!.IsUnc);
+			Assert.IsTrue(DosDeviceUnc.TryParse(scan, out var prefix));
 			Assert.AreEqual(@"127.0.0.1", prefix!.Server);
 			Assert.AreEqual(@"share-name", prefix!.Share);
 			Assert.AreEqual(@"127.0.0.1\share-name", prefix!.Volume);
@@ -593,8 +625,7 @@ namespace Tkuri2010.Fsuty.Tests
 			var src = @"\\.\C:\dir\file.txt";
 			var scan = new FilepathScanner(src);
 
-			Assert.IsTrue(DosDevice.TryParse(scan, out var prefix));
-			Assert.IsFalse(prefix!.IsUnc);
+			Assert.IsTrue(DosDeviceDrive.TryParse(scan, out var prefix));
 			Assert.AreEqual(@"C:", prefix!.Volume);
 		}
 
@@ -606,7 +637,6 @@ namespace Tkuri2010.Fsuty.Tests
 			var scan = new FilepathScanner(src);
 
 			Assert.IsTrue(DosDevice.TryParse(scan, out var prefix));
-			Assert.IsFalse(prefix!.IsUnc);
 			Assert.AreEqual(@"Volume{xxx-xxx-xxx}", prefix!.Volume);
 		}
 
