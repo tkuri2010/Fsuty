@@ -55,4 +55,36 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 ```
 
 
+### `LargeFileLinesProcessor` (namespace `Tkuri2010.Fsuty.Text.Std`)
 
+Filter and process large file lines.
+Using Memory Mapped File.
+Multi-Thread.
+
+```cs
+	public async Task PoormansGrep()
+	{
+		var largeFile = "our/very-large-log-file.log";
+		var pattern = new Regex(@"ERROR|WARN");
+
+		// filter and process
+		// executed in many threads.
+		Func<LineInfo, Result<string>> func = (lineInfo) =>
+		{
+			var str = lineInfo.ToString(Encoding.UTF8);
+
+			if (pattern.Match(str).Success)
+				return Result.Ok<string>(str);
+			else
+				return Result.No<string>();
+		};
+
+		using var processor = new LargeFileLinesProcessor(largeFile, func);
+
+		await foreach (var result in processor.ProcessAsync())
+		{
+			Console.Write($"{result.LineNumber}: {result.Value}");
+		}
+	}
+
+```
