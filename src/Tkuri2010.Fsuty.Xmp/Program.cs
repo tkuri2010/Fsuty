@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -9,9 +10,10 @@ namespace Tkuri2010.Fsuty.Xmp
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
-			Xmp1(args);
+			//Xmp1(args);
+			await Text.Std.LinesProcessorXmp1Grep.Exec(args);
         }
 
 		static void Xmp1(string[] args)
@@ -69,7 +71,6 @@ namespace Tkuri2010.Fsuty.Xmp
 				}
 			}
 		}
-
 
 #if false
 		[DllImport("shlwapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
