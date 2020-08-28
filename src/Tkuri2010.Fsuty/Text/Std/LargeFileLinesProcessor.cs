@@ -38,13 +38,42 @@ namespace Tkuri2010.Fsuty.Text.Std
 
 			return Body;
 		}
+
+
+		override public string ToString()
+		{
+			return ToString(Encoding.Default);
+		}
+
+
+		public string ToString(Encoding encoding)
+		{
+			return encoding.GetString(Body, 0, Count);
+		}
 	}
 
 
-	public class LineInfo
+	public class LineInfo<TResult>
 	{
+		static readonly ResultNo<TResult> _CahcedNo = new ResultNo<TResult>();
+
 		public ByteArray LineBytes { get; set; } = ByteArray.Empty;
+
+
+		public Result<TResult> No()
+		{
+			return _CahcedNo;
+		}
+
+
+		public Result<TResult> Ok(TResult val)
+		{
+			return new ResultOk<TResult>(val);
+		}
 	}
+
+
+	public delegate Result<TResult> ProcessingFunc<TResult>(LineInfo<TResult> lineInfo);
 
 
 	/// <summary>
@@ -53,20 +82,6 @@ namespace Tkuri2010.Fsuty.Text.Std
 	/// <typeparam name="T"></typeparam>
 	public abstract class Result<T>
 	{
-		static readonly ResultNo<T> _CahcedNo = new ResultNo<T>();
-
-		public static Result<T> No()
-		{
-			return _CahcedNo;
-		}
-
-
-		public static Result<T> Ok(T val)
-		{
-			return new ResultOk<T>(val);
-		}
-
-
 		public abstract bool IsOk { get; }
 
 		public long LineNumber { get; set; } = -1;
@@ -102,12 +117,12 @@ namespace Tkuri2010.Fsuty.Text.Std
 
 		string mFilePath;
 
-		Func<LineInfo, Result<T>> mProcess;
+		ProcessingFunc<T> mProcess;
 
 		LinkedList<Lfdetail.Chunk>? mDisposableChunkList = null;
 
 
-		public LargeFileLinesProcessor(LargeFileLinesProcessorSettings settings, string filePath, Func<LineInfo, Result<T>> process)
+		public LargeFileLinesProcessor(LargeFileLinesProcessorSettings settings, string filePath, ProcessingFunc<T> process)
 		{
 			mSettings = settings;
 			mFilePath = filePath;
@@ -115,7 +130,7 @@ namespace Tkuri2010.Fsuty.Text.Std
 		}
 
 
-		public LargeFileLinesProcessor(string filePath, Func<LineInfo, Result<T>> process)
+		public LargeFileLinesProcessor(string filePath, ProcessingFunc<T> process)
 		{
 			mFilePath = filePath;
 			mProcess = process;
@@ -209,9 +224,9 @@ namespace Tkuri2010.Fsuty.Text.Std.Lfdetail
 		/// </summary>
 		/// <param name="chunk"></param>
 		/// <param name="process"></param>
-		public void ProcessChunk(IReadable chunk, Func<LineInfo, Result<TResult>> process)
+		public void ProcessChunk(IReadable chunk, ProcessingFunc<TResult> process)
 		{
-			var lineInfo = new LineInfo();
+			var lineInfo = new LineInfo<TResult>();
 			var enumerator = new Lfdetail.BasicLineEnumerator();
 			foreach (var lineBuf in enumerator.Enumerate(chunk))
 			{
