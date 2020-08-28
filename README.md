@@ -61,7 +61,7 @@ Filter and process large file lines.
 Using Memory Mapped File.
 Multi-Thread.
 
-See `src / Tkuri2010.Fsuty.Xmp / LineProcessorXmp1Grep.cs` for libing example.
+See `src / Tkuri2010.Fsuty.Xmp / LineProcessorXmp1Grep.cs` for living example.
 
 ```cs
 	public async Task PoormansGrep()
