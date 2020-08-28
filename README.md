@@ -61,25 +61,29 @@ Filter and process large file lines.
 Using Memory Mapped File.
 Multi-Thread.
 
+See `src / Tkuri2010.Fsuty.Xmp / LineProcessorXmp1Grep.cs` for libing example.
+
 ```cs
 	public async Task PoormansGrep()
 	{
 		var largeFile = "our/very-large-log-file.log";
 		var pattern = new Regex(@"ERROR|WARN");
 
-		// filter and process
-		// executed in many threads.
-		Func<LineInfo, Result<string>> func = (lineInfo) =>
+		// Filter and Process.
+		// This func is executed in many threads.
+		// The argument `lineInfo` is a `LineInfo<string>`.
+		// Use `LineInfo.Ok(v)` or `LineInfo.No()` for return value.
+		ProcessingFunc<string> func = (lineInfo) =>
 		{
-			var str = lineInfo.ToString(Encoding.UTF8);
+			var str = lineInfo.LineBytes.ToString(Encoding.UTF8);
 
 			if (pattern.Match(str).Success)
-				return Result.Ok<string>(str);
+				return lineInfo.Ok(str);
 			else
-				return Result.No<string>();
+				return lineInfo.No();
 		};
 
-		using var processor = new LargeFileLinesProcessor(largeFile, func);
+		using var processor = new LargeFileLinesProcessor<string>(largeFile, func);
 
 		await foreach (var result in processor.ProcessAsync())
 		{

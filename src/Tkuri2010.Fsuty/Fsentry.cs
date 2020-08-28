@@ -10,10 +10,25 @@ namespace Tkuri2010.Fsuty
 {
 	public enum FsentryEvent
 	{
+		/// <summary>
+		/// (not used)
+		/// </summary>
 		None,
+		/// <summary>
+		/// (not used)
+		/// </summary>
 		Error,
+		/// <summary>
+		/// a file found
+		/// </summary>
 		File,
+		/// <summary>
+		/// a directory found, enter
+		/// </summary>
 		EnterDir,
+		/// <summary>
+		/// leaving from a directory
+		/// </summary>
 		LeaveDir,
 	}
 
@@ -27,12 +42,24 @@ namespace Tkuri2010.Fsuty
 
 	public class Fsentry
 	{
+		/// <summary>
+		/// visits the directory, recursivery
+		/// </summary>
+		/// <param name="basePath"></param>
+		/// <param name="ct"></param>
+		/// <returns></returns>
 		public static IAsyncEnumerable<Fsentry> VisitAsync(Filepath basePath, CancellationToken ct = default)
 		{
 			return VisitAsync(basePath.ToString(), ct);
 		}
 
 
+		/// <summary>
+		/// visits the directory, recursivery
+		/// </summary>
+		/// <param name="basePath"></param>
+		/// <param name="ct"></param>
+		/// <returns></returns>
 		public static async IAsyncEnumerable<Fsentry> VisitAsync(string basePath, [EnumeratorCancellation] CancellationToken ct = default)
 		{
 			var q = new DirsFilesStack();

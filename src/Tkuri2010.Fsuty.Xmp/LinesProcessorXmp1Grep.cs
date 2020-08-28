@@ -19,6 +19,7 @@ namespace Tkuri2010.Fsuty.Text.Std
 			"    C:\\here> dotnet run  C:/logs/large-text.log  [Aa]bcde"
 		};
 
+
 		public static async Task Exec(string[] args)
 		{
 			if (args.Length < 2)
@@ -30,14 +31,14 @@ namespace Tkuri2010.Fsuty.Text.Std
 			var file = args[0];
 			var pattern = new Regex(args[1]);
 
-			Func<LineInfo, Result<string>> findingFunction = info =>
+			ProcessingFunc<string> findingFunction = (info) =>  // info ... LineInfo<string>
 			{
-				var str =  Encoding.UTF8.GetString(info.LineBytes.Body, 0, info.LineBytes.Count);
+				var str =  info.LineBytes.ToString(Encoding.UTF8);
 
 				if (pattern.Match(str).Success)
-					return Result<string>.Ok(str);
+					return info.Ok(str);
 				else
-					return Result<string>.No();
+					return info.No();
 			};
 
 			using var processor = new LargeFileLinesProcessor<string>(file, findingFunction);
