@@ -57,7 +57,9 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 
 ### `LargeFileLinesProcessor` (namespace `Tkuri2010.Fsuty.Text.Std`)
 
-Filter and process large file lines.
+(hmm... not so fast I expected...)
+
+Process and filter large file lines.
 Using Memory Mapped File.
 Multi-Thread.
 
@@ -73,22 +75,37 @@ See `src / Tkuri2010.Fsuty.Xmp / LineProcessorXmp1Grep.cs` for living example.
 		// This func is executed in many threads.
 		// The argument `lineInfo` is a `LineInfo<string>`.
 		// Use `LineInfo.Ok(v)` or `LineInfo.No()` for return value.
-		ProcessingFunc<string> func = (lineInfo) =>
+		ProcessingFunc<string> processingFunc = (lineInfo) =>
 		{
+			// process as you like
 			var str = lineInfo.LineBytes.ToString(Encoding.UTF8);
 
+			// filter as you like
 			if (pattern.Match(str).Success)
 				return lineInfo.Ok(str);
 			else
 				return lineInfo.No();
 		};
 
-		using var processor = new LargeFileLinesProcessor<string>(largeFile, func);
+		using var processor = new LargeFileLinesProcessor<string>(largeFile, processingFunc);
 
 		await foreach (var result in processor.ProcessAsync())
 		{
+			// enumerates the result what you filtered
 			Console.Write($"{result.LineNumber}: {result.Value}");
 		}
 	}
 
 ```
+#### How does it work
+
+1. Specified file is divided into about 256Kbytes each, while finding `LF` character.
+1. One chunk is mapped to one thread.
+1. In the thread, each line is passed to your `processingFunc(lineInfo)` func sequentially.
+	- In your `processingFunc(lineInfo)` func, you can get the bytearray from `lineInfo.LineBytes` property, that has `ToString(encoding)` method.
+	- Process the bytearray / string as you want.
+	- If you accept the processed result, return `lineInfo.Ok(result)`. If you reject it, return `lineInfo.No()`.
+1. The `processor` enumerates the processed result that you accept.
+
+![How works](memos/imgs/how_works.png)
+

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace Tkuri2010.Fsuty.Text.Std
 {
 	/// <summary>
-	/// example of class `LargeFileLineProcessor` (namespace `Tkuri2010.Fsuty.Text.Std`)
+	/// Poor man's grep / An example of class `LargeFileLineProcessor` (namespace `Tkuri2010.Fsuty.Text.Std`)
 	/// </summary>
 	public class LinesProcessorXmp1Grep
 	{
@@ -20,7 +20,7 @@ namespace Tkuri2010.Fsuty.Text.Std
 		};
 
 
-		public static async Task Exec(string[] args)
+		public static async Task ExecAsync(string[] args)
 		{
 			if (args.Length < 2)
 			{
@@ -35,7 +35,7 @@ namespace Tkuri2010.Fsuty.Text.Std
 			{
 				var str =  info.LineBytes.ToString(Encoding.UTF8);
 
-				if (pattern.Match(str).Success)
+				if (Regex.IsMatch(str, args[1]))
 					return info.Ok(str);
 				else
 					return info.No();
@@ -62,5 +62,32 @@ namespace Tkuri2010.Fsuty.Text.Std
 				Put(l);
 			}
 		}
+
+
+		#region my laob.
+
+		public static async Task MakeLargeFileAsync()
+		{
+			using var file = new System.IO.FileStream("r:/large_file.txt", System.IO.FileMode.Create);
+			for (var i = 1; i <= 100000; i++)
+			{
+				var line = $"xxxxxxxxx {i} xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n";
+				var bytes = Encoding.UTF8.GetBytes(line);
+				await file.WriteAsync(bytes);
+			}
+		}
+
+		public static void ExecSimpl()
+		{
+			foreach (var line in System.IO.File.ReadAllLines("r:/large_file.txt"))
+			{
+				if (Regex.IsMatch(line, "173"))
+				{
+					Console.WriteLine(line);
+				}
+			}
+		}
+
+		#endregion
 	}
 }

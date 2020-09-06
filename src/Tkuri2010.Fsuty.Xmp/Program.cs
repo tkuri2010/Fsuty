@@ -13,7 +13,7 @@ namespace Tkuri2010.Fsuty.Xmp
         static async Task Main(string[] args)
         {
 			//Xmp1(args);
-			await Text.Std.LinesProcessorXmp1Grep.Exec(args);
+			await Text.Std.LinesProcessorXmp1Grep.ExecAsync(args);
         }
 
 		static void Xmp1(string[] args)
