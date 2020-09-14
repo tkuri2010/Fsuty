@@ -87,10 +87,12 @@ namespace Tkuri2010.Fsuty.Text.Std
 		public long LineNumber { get; set; } = -1;
 
 		public abstract T Value { get; }
+
+		public static implicit operator Result<T>(T val) => new ResultOk<T>(val);
 	}
 
 
-	class ResultNo<T> : Result<T>
+	internal class ResultNo<T> : Result<T>
 	{
 		public override bool IsOk => false;
 
@@ -98,13 +100,13 @@ namespace Tkuri2010.Fsuty.Text.Std
 	}
 
 
-	class ResultOk<T> : Result<T>
+	internal class ResultOk<T> : Result<T>
 	{
 		public override bool IsOk => true;
 
 		public override T Value { get; }
 
-		public ResultOk(T val)
+		internal ResultOk(T val)
 		{
 			Value = val;
 		}
