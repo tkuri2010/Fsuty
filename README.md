@@ -74,19 +74,19 @@ See `src / Tkuri2010.Fsuty.Xmp / LineProcessorXmp1Grep.cs` for living example.
 		// Filter and Process.
 		// This func is executed in many threads.
 		// The argument `lineInfo` is a `LineInfo<string>`.
-		// Use `LineInfo.Ok(v)` or `LineInfo.No()` for return value.
+		// You can use `LineInfo.Ok(v)` or `LineInfo.No()` for return value.
 		ProcessingFunc<string> processingFunc = (lineInfo) =>
 		{
 			// process as you like
 			var str = lineInfo.LineBytes.ToString(Encoding.UTF8);
 
 			// filter as you like
-			if (pattern.Match(str).Success)
-				return lineInfo.Ok(str);
-			else
-				return lineInfo.No();
+			return pattern.Match(str).Success
+					? str  // or you can `lineInfo.Ok(str)` explicitly
+					: lineInfo.No();
 		};
 
+		// Dispose later.
 		using var processor = new LargeFileLinesProcessor<string>(largeFile, processingFunc);
 
 		await foreach (var result in processor.ProcessAsync())
@@ -104,7 +104,7 @@ See `src / Tkuri2010.Fsuty.Xmp / LineProcessorXmp1Grep.cs` for living example.
 1. In the thread, each line is passed to your `processingFunc(lineInfo)` func sequentially.
 	- In your `processingFunc(lineInfo)` func, you can get the bytearray from `lineInfo.LineBytes` property, that has `ToString(encoding)` method.
 	- Process the bytearray / string as you want.
-	- If you accept the processed result, return `lineInfo.Ok(result)`. If you reject it, return `lineInfo.No()`.
+	- If you accept the processed result, return the result (there is a implicit conversion), or you can use `lineInfo.Ok(result)` explicitly. If you reject it, return `lineInfo.No()`.
 1. The `processor` enumerates the processed result that you accept.
 
 ![How works](memos/imgs/how_works.png)

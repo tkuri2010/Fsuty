@@ -35,10 +35,9 @@ namespace Tkuri2010.Fsuty.Text.Std
 			{
 				var str =  info.LineBytes.ToString(Encoding.UTF8);
 
-				if (Regex.IsMatch(str, args[1]))
-					return info.Ok(str);
-				else
-					return info.No();
+				return Regex.IsMatch(str, args[1])
+						? str
+						: info.No();
 			};
 
 			using var processor = new LargeFileLinesProcessor<string>(file, findingFunction);
