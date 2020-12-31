@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -84,7 +85,11 @@ namespace Tkuri2010.Fsuty.Text.Std
 	{
 		public abstract bool IsOk { get; }
 
-		public long LineNumber { get; set; } = -1;
+		public long LineNumber => LocalLineNumber + (Reducer?.PreviousTotalLineCount ?? 0);
+
+		internal long LocalLineNumber = -1;
+
+		internal Lfdetail.LfReducer<T>? Reducer = null;
 
 		public abstract T Value { get; }
 
@@ -113,138 +118,32 @@ namespace Tkuri2010.Fsuty.Text.Std
 	}
 
 
-	public class LargeFileLinesProcessor<T> : IDisposable
+	public class LargeFileLinesProcessor
 	{
-		LargeFileLinesProcessorSettings mSettings = LargeFileLinesProcessorSettings.Default;
-
-		string mFilePath;
-
-		ProcessingFunc<T> mProcess;
-
-		LinkedList<Lfdetail.Chunk>? mDisposableChunkList = null;
-
-
-		public LargeFileLinesProcessor(LargeFileLinesProcessorSettings settings, string filePath, ProcessingFunc<T> process)
+		public static IAsyncEnumerable<Result<T>> ProcessAsync<T>(string filePath, ProcessingFunc<T> processingFunc, CancellationToken ct = default)
 		{
-			mSettings = settings;
-			mFilePath = filePath;
-			mProcess = process;
+			return ProcessAsync(
+					LargeFileLinesProcessorSettings.Default,
+					filePath,
+					processingFunc,
+					ct
+			);
 		}
 
 
-		public LargeFileLinesProcessor(string filePath, ProcessingFunc<T> process)
+		public static async IAsyncEnumerable<Result<T>> ProcessAsync<T>(LargeFileLinesProcessorSettings settings, string filePath, ProcessingFunc<T> processingFunc, [EnumeratorCancellation] CancellationToken ct = default)
 		{
-			mFilePath = filePath;
-			mProcess = process;
-		}
-
-
-		public async IAsyncEnumerable<Result<T>> ProcessAsync()
-		{
-			var chunksEnumerator = new Lfdetail.LargeFileChunkEnumerator(mSettings);
-
-			mDisposableChunkList = new LinkedList<Lfdetail.Chunk>(chunksEnumerator.Enumerate(mFilePath));
-
-			// ToList() を実行する事で、全てのタスク実行開始を確実にする。
-			// （実際には、タスクスケジューラの都合によっては数個ずつしかタスクが始まらないかも知れないが
-			//   ここでは問題にならない。以下で await などをしているが、その間でもいつかタスクを初めてくれればよい）
-			var tasks = mDisposableChunkList.Select(chunk => StartProcess(chunk)).ToList();
-
-			long lineNumOffset = 0;
-
-			foreach (var task in tasks)
+			await using var mapper = new Lfdetail.LfMapper<T>(filePath, settings.RoughChunkSize, processingFunc);
+			await foreach (var result in AsyncMapReduceEnumerate.MapReduceAsync(settings.TaskFactory, mapper, ct))
 			{
-				var chunkProcessor = await task;
-
-				foreach (var rv in chunkProcessor.ResultList)
-				{
-					rv.LineNumber += lineNumOffset;
-					yield return rv;
-				}
-
-				lineNumOffset += chunkProcessor.LineNumInChunk;
+				yield return result;
 			}
 		}
-
-
-		Task<Lfdetail.ChunkProcessor<T>> StartProcess(Lfdetail.Chunk chunk)
-		{
-			// IEnumerable は、実際に値が必要とされるまで処理を遅延させられる。
-			// 遅延を避けるため、ToList() を明示的に呼び出している。
-			return mSettings.TaskFactory.StartNew(() =>
-			{
-				var cp = new Lfdetail.ChunkProcessor<T>();
-				cp.ProcessChunk(new Lfdetail.MemFileAccess(chunk.Access, chunk.Size), mProcess);
-				return cp;
-			});
-		}
-
-
-		#region disposing
-
-		bool disposedValue = false;
-
-		public void Dispose()
-		{
-			if (!disposedValue)
-			{
-				var m = mDisposableChunkList;
-				mDisposableChunkList = null;
-				if (m != null)
-				{
-					foreach (var i in m)
-					{
-						i.Access.Dispose();
-					}
-				}
-				disposedValue = true;
-			}
-		}
-
-		#endregion
 	}
 }
 
 namespace Tkuri2010.Fsuty.Text.Std.Lfdetail
 {
-	/// <summary>
-	/// `Chunk` オブジェクトを受け取り、`BasicLineEnumerator` を使って行に分割し、
-	/// 受け取った Func<> で任意の処理を行い、
-	/// 結果に応じて Result<> を列挙するロジック。
-	/// 処理した行数をプロパティとして保持している。
-	/// </summary>
-	public class ChunkProcessor<TResult>
-	{
-		public long LineNumInChunk { get; private set; } = 0;
-
-
-		public List<Result<TResult>> ResultList = new List<Result<TResult>>();
-
-
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <param name="chunk"></param>
-		/// <param name="process"></param>
-		public void ProcessChunk(IReadable chunk, ProcessingFunc<TResult> process)
-		{
-			var lineInfo = new LineInfo<TResult>();
-			var enumerator = new Lfdetail.BasicLineEnumerator();
-			foreach (var lineBuf in enumerator.Enumerate(chunk))
-			{
-				LineNumInChunk++;
-				lineInfo.LineBytes = lineBuf;
-				var result = process(lineInfo);
-				if (result.IsOk)
-				{
-					result.LineNumber = LineNumInChunk; // 暫定値である事に注意
-					ResultList.Add(result);
-				}
-			}
-		}
-	}
-
-
 	public interface IReadable
 	{
 		long Length { get;}
@@ -266,6 +165,96 @@ namespace Tkuri2010.Fsuty.Text.Std.Lfdetail
 		/// <param name="position"></param>
 		/// <returns></returns>
 		byte ReadByte(long position);
+	}
+
+
+	public class MemFileViewStrm : IReadable
+	{
+		public MemoryMappedViewStream Payload { get; private set; }
+
+		public long Length { get; private set ;}
+
+
+		MmvsCache mCache;
+
+		public MemFileViewStrm(MemoryMappedViewStream mmvs, long length)
+		{
+			Payload = mmvs;
+			Length = length;
+			mCache = new MmvsCache();
+		}
+
+
+		public int ReadBuffer(long position, ByteArray buffer, int count)
+		{
+			if (Payload.Position != position) Payload.Position = position;
+			var rv = Payload.Read(buffer.RequireSize(count), 0, count);
+			buffer.Count = rv;
+			return rv;
+		}
+
+
+		public byte ReadByte(long position)
+		{
+			return (byte)mCache.ReadEx(Payload, position);
+		}
+	}
+
+
+	class MmvsCache
+	{
+		byte[] Cacheds;
+
+		long CachedPosStart = 0;
+
+		long CachedPosOver = 0;
+
+		bool HasCache(long pos) => CachedPosStart <= pos && pos < CachedPosOver;
+
+
+		internal MmvsCache() : this(24 * 1024)
+		{
+		}
+
+
+		internal MmvsCache(int cacheableSize)
+		{
+			Cacheds = new byte[cacheableSize];
+		}
+
+
+		internal async Task CacheAsync(MemoryMappedViewStream stream, long start)
+		{
+			stream.Position = start;
+			var readSize = await stream.ReadAsync(Cacheds, 0, Cacheds.Length);
+			CachedPosStart = start;
+			CachedPosOver = start + readSize;
+		}
+
+
+		internal void Cache(MemoryMappedViewStream stream, long start)
+		{
+			stream.Position = start;
+			var readSize = stream.Read(Cacheds, 0, Cacheds.Length);
+			CachedPosStart = start;
+			CachedPosOver = start + readSize;
+		}
+
+
+		internal int Read(long position)
+		{
+			return HasCache(position) ? Cacheds[position - CachedPosStart] : -1;
+		}
+
+
+		internal int ReadEx(MemoryMappedViewStream stream, long position)
+		{
+			if (!HasCache(position))
+			{
+				Cache(stream, position);
+			}
+			return Read(position);
+		}
 	}
 
 
@@ -348,19 +337,33 @@ namespace Tkuri2010.Fsuty.Text.Std.Lfdetail
 	/// </summary>
 	public class BasicLineEnumerator
 	{
+		public static TimeSpan elaps = TimeSpan.Zero;
+
 		public IEnumerable<ByteArray> Enumerate(IReadable readable)
 		{
+			var watch = new System.Diagnostics.Stopwatch();
+			//watch.Start();
+			try
+			{
 			var buffer = new ByteArray();
 			long offset = 0;
 			long pos = 0; // 現在注視している場所
 			for (; ; )
 			{
+				watch.Start();
 				pos = FindLineEnd(readable, pos);
+				watch.Stop();
 				var size = pos - offset;
 				if (size <= 0) break;
 				readable.ReadBuffer(offset, buffer, (int)size);
 				yield return buffer;
 				offset = pos;
+			}
+			}
+			finally
+			{
+				//watch.Stop();
+				elaps += watch.Elapsed;
 			}
 		}
 
@@ -391,9 +394,10 @@ namespace Tkuri2010.Fsuty.Text.Std.Lfdetail
 	}
 
 
-	public class Chunk
+	public class DisposableChunk : IDisposable
 	{
-		public MemoryMappedViewAccessor Access;
+		//public MemoryMappedViewAccessor Access;
+		public MemoryMappedViewStream Stream;
 
 		/// <summary>
 		/// 元のメモリマップトファイルの、何バイト目からを切り出したかを保持しているが
@@ -406,26 +410,33 @@ namespace Tkuri2010.Fsuty.Text.Std.Lfdetail
 		public bool IsLastChunk;
 
 
-		internal Chunk(MemoryMappedViewAccessor acc, long offset, long size, bool isLast)
+		internal DisposableChunk(MemoryMappedViewStream strm, long offset, long size, bool isLast)
 		{
 			Offset = offset;
 			Size = size;
-			Access = acc;
+			Stream = strm;
 			IsLastChunk = isLast;
+		}
+
+
+		public void Dispose()
+		{
+			Stream.Dispose();
 		}
 	}
 
 
 	public class LargeFileChunkEnumerator
 	{
-		private LargeFileLinesProcessorSettings mSettings;
+		//private LargeFileLinesProcessorSettings mSettings;
+		long mRoughChunkSize;
 
-		public LargeFileChunkEnumerator(LargeFileLinesProcessorSettings settings)
+		public LargeFileChunkEnumerator(long roughChunkSize)
 		{
-			mSettings = settings;
+			mRoughChunkSize = roughChunkSize;
 		}
 
-		public IEnumerable<Chunk> Enumerate(string filePath)
+		public IEnumerable<DisposableChunk> Enumerate(string filePath)
 		{
 			int LOOP_MAX = 8 * 1024;
 			var safe = 0;
@@ -463,10 +474,10 @@ namespace Tkuri2010.Fsuty.Text.Std.Lfdetail
 		}
 
 
-		Chunk FindChunk(MemoryMappedFile mm, long offset, long fileTotalSize)
+		DisposableChunk FindChunk(MemoryMappedFile mm, long offset, long fileTotalSize)
 		{
 			var localOffset = 0L;
-			var chunkSize = mSettings.RoughChunkSize;
+			var chunkSize = mRoughChunkSize;
 			for (var trial = 0; trial < 1024; trial++)
 			{
 				// これでファイルの終わりに到達するか？
@@ -474,22 +485,25 @@ namespace Tkuri2010.Fsuty.Text.Std.Lfdetail
 				if (isLastChunk)
 				{
 					var lastChunkSize = fileTotalSize - offset;
-					var lastChunk = mm.CreateViewAccessor(offset, lastChunkSize, MemoryMappedFileAccess.Read);
-					return new Chunk(lastChunk, offset, lastChunkSize, isLastChunk);
+					//var lastChunk = mm.CreateViewAccessor(offset, lastChunkSize, MemoryMappedFileAccess.Read);
+					var lastChunk = mm.CreateViewStream(offset, lastChunkSize, MemoryMappedFileAccess.Read);
+					return new DisposableChunk(lastChunk, offset, lastChunkSize, isLastChunk);
 				}
 
-				MemoryMappedViewAccessor? chunk = null;
+				//MemoryMappedViewAccessor? chunk = null;
+				MemoryMappedViewStream? chunk = null;
 				bool chunkShouldBeDisposed = true;
 				try
 				{
-					chunk = mm.CreateViewAccessor(offset, chunkSize, MemoryMappedFileAccess.Read);
+					//chunk = mm.CreateViewAccessor(offset, chunkSize, MemoryMappedFileAccess.Read);
+					chunk = mm.CreateViewStream(offset, chunkSize, MemoryMappedFileAccess.Read);
 					// LF を探す
 					var lastLfPos = FindLastByte(chunk, localOffset, chunkSize, (byte)'\n');
 
 					if (0 <= lastLfPos)
 					{
 						chunkShouldBeDisposed = false;
-						return new Chunk(chunk, offset, lastLfPos + 1, false);
+						return new DisposableChunk(chunk, offset, lastLfPos + 1, false);
 					}
 				}
 				finally
@@ -498,18 +512,20 @@ namespace Tkuri2010.Fsuty.Text.Std.Lfdetail
 				}
 
 				localOffset = chunkSize;
-				chunkSize += (mSettings.RoughChunkSize / 2); // 適当に増やす。。。どう増やそうか？
+				chunkSize += (mRoughChunkSize / 2); // 適当に増やす。。。どう増やそうか？
 			}
 
 			throw new System.Exception("Line separator not found. Too long line exists?");
 		}
 
 
-		static long FindLastByte(MemoryMappedViewAccessor mm, long minPos, long maxSize, byte target)
+		//static long FindLastByte(MemoryMappedViewAccessor mm, long minPos, long maxSize, byte target)
+		static long FindLastByte(MemoryMappedViewStream mm, long minPos, long maxSize, byte target)
 		{
 			for (long p = maxSize - 1; p >= minPos; p--)
 			{
-				if (target == mm.ReadByte(p))
+				mm.Position = p;
+				if (target == mm.ReadByte())
 				{
 					return p;
 				}
@@ -522,4 +538,179 @@ namespace Tkuri2010.Fsuty.Text.Std.Lfdetail
 			System.Console.WriteLine(o);
 		}
 	}
+
+
+	public class LfMapper<T> : IAsyncTaskGenerator<Result<T>>, IAsyncDisposable
+	{
+		string mFileName;
+
+		long mRoughChunkSize;
+
+		ProcessingFunc<T> mProcessingFunc;
+
+		List<LfReducer<T>> mTasks = new List<LfReducer<T>>();
+
+		int mLoopProcessing = 0;
+
+		int mDisposeCalledCount = 0;
+
+
+		public LfMapper(string fileName, long roughChunkSize, ProcessingFunc<T> processingFunc)
+		{
+			mFileName = fileName;
+			mRoughChunkSize = roughChunkSize;
+			mProcessingFunc = processingFunc;
+		}
+
+
+		public async IAsyncEnumerable<IAsyncReducer<Result<T>>> EnumerateAsync([EnumeratorCancellation] CancellationToken ct)
+		{
+			try
+			{
+				Interlocked.Increment(ref mLoopProcessing);
+
+				LfReducer<T>? lastReducer = null;
+
+				var chunkEnum = new LargeFileChunkEnumerator(mRoughChunkSize);
+
+				foreach (var c in chunkEnum.Enumerate(mFileName))
+				{
+					Action disposeLater = () => c.Dispose();
+
+					if (1 <= mDisposeCalledCount)
+					{
+						disposeLater.Invoke();
+						break;
+					}
+
+					if (ct.IsCancellationRequested)
+					{
+						disposeLater.Invoke();
+						break;
+					}
+
+					//var mem = new MemFileAccess(c.Access, c.Size);
+					var mem = new MemFileViewStrm(c.Stream, c.Size);
+					var t = new LfReducer<T>(lastReducer, mem, mProcessingFunc, disposeLater);
+					mTasks.Add(t);
+					yield return t;
+					lastReducer = t;
+				}
+			}
+			finally
+			{
+				Interlocked.Decrement(ref mLoopProcessing);
+			}
+		}
+
+
+		#region disposing
+
+		public async ValueTask DisposeAsync()
+		{
+			Interlocked.Increment(ref mDisposeCalledCount);
+
+			int safeCount = 0;
+			while (1 <= mLoopProcessing)
+			{
+				await Task.Yield();
+				if (100 < safeCount++) break;
+			}
+
+			foreach (var t in mTasks)
+			{
+				await t.DisposeAsync();
+			}
+		}
+
+		#endregion
+	}
+
+
+	public class LfReducer<T> : IAsyncReducer<Result<T>>, IAsyncDisposable
+	{
+		long LocalTotalLineCount = 0;
+
+		/// <summary>
+		/// 本reducerまでに存在した行の行数を、遅延して計算したい
+		/// </summary>
+		LfReducer<T>? mPrevReducer = null;
+
+		long TotalLineCountUntilHere => LocalTotalLineCount + PreviousTotalLineCount;
+
+		internal long PreviousTotalLineCount
+		{
+			get
+			{
+				if (mPreviousTotalLineCountCache < 0)
+				{
+					mPreviousTotalLineCountCache = mPrevReducer?.TotalLineCountUntilHere ?? 0;
+				}
+				return mPreviousTotalLineCountCache;
+			}
+		}
+
+		long mPreviousTotalLineCountCache = -1;
+
+		int mDisposeCalledCount = 0;
+
+		IReadable mReadable;
+
+		ProcessingFunc<T> mProcessingFunc;
+
+		Action mDisposeProcess;
+
+		public LfReducer(LfReducer<T>? prevReducer, IReadable readable, ProcessingFunc<T> processingFunc, Action disposeProcess)
+		{
+			mPrevReducer = prevReducer;
+			mReadable = readable;
+			mProcessingFunc = processingFunc;
+			mDisposeProcess = disposeProcess;
+		}
+
+
+		public async IAsyncEnumerable<Result<T>> EnumerateResultAsync([EnumeratorCancellation] CancellationToken ct)
+		{
+			var e = new BasicLineEnumerator();
+			var lineInfo = new LineInfo<T>();
+			foreach (var line in e.Enumerate(mReadable))
+			{
+				LocalTotalLineCount++;
+
+				if (1 <= mDisposeCalledCount)
+				{
+					break;
+				}
+				if (ct.IsCancellationRequested)
+				{
+					break;
+				}
+
+				lineInfo.LineBytes = line;
+				var r = mProcessingFunc.Invoke(lineInfo);
+				if (r.IsOk)
+				{
+					r.Reducer = this;
+					r.LocalLineNumber = LocalTotalLineCount;
+					yield return r;
+				}
+			}
+		}
+
+		#region disposing
+
+		public ValueTask DisposeAsync()
+		{
+			Interlocked.Increment(ref mDisposeCalledCount);
+
+			mPrevReducer = null;
+
+			mDisposeProcess.Invoke();
+
+			return new ValueTask();
+		}
+
+		#endregion
+	}
 }
+

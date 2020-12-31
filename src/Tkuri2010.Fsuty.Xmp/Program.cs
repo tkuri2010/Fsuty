@@ -14,6 +14,7 @@ namespace Tkuri2010.Fsuty.Xmp
         {
 			//Xmp1(args);
 			await Text.Std.LinesProcessorXmp1Grep.ExecAsync(args);
+			//Text.Std.LinesProcessorXmp1Grep.TryUseMemMapFileViewStream();
         }
 
 		static void Xmp1(string[] args)

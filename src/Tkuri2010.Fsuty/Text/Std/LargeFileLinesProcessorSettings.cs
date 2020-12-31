@@ -16,7 +16,7 @@ namespace Tkuri2010.Fsuty.Text.Std
 		/// ファイルを "大まかには" 何バイト毎に分割するか
 		/// </summary>
 		/// <value></value>
-		public long RoughChunkSize { get; set; } = 256 * 1024;
+		public long RoughChunkSize { get; set; } = 1 * 1024 * 1024;
 
 
 		/// <summary>

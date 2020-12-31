@@ -29,22 +29,38 @@ namespace Tkuri2010.Fsuty.Text.Std
 			}
 
 			var file = args[0];
-			var pattern = new Regex(args[1]);
+			var pattern = args[1];
 
+			var watch = new System.Diagnostics.Stopwatch();
+			watch.Start();
+
+#if false
 			ProcessingFunc<string> findingFunction = (info) =>  // info ... LineInfo<string>
 			{
 				var str =  info.LineBytes.ToString(Encoding.UTF8);
 
-				return Regex.IsMatch(str, args[1])
-						? str
+				return Regex.IsMatch(str, pattern)
+						? str     // or explicitly `info.Ok(str)`.
 						: info.No();
 			};
 
-			using var processor = new LargeFileLinesProcessor<string>(file, findingFunction);
-			await foreach (var result in processor.ProcessAsync())
+			await foreach (var result in LargeFileLinesProcessor.ProcessAsync(file, findingFunction))
 			{
 				Put($"Line {result.LineNumber}: " + result.Value.TrimEnd());
 			}
+#else
+			foreach (var line in System.IO.File.ReadAllLines(file))
+			{
+				if (Regex.IsMatch(line, pattern))
+				{
+					Put(line);
+				}
+			}
+#endif
+
+			watch.Stop();
+			Put("elap: " + watch.Elapsed.TotalMilliseconds);
+			Put("line enum elap: " + Lfdetail.BasicLineEnumerator.elaps.TotalMilliseconds);
 		}
 
 
@@ -68,9 +84,10 @@ namespace Tkuri2010.Fsuty.Text.Std
 		public static async Task MakeLargeFileAsync()
 		{
 			using var file = new System.IO.FileStream("r:/large_file.txt", System.IO.FileMode.Create);
-			for (var i = 1; i <= 100000; i++)
+			var manyXs = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+			for (var i = 1; i <= 500000; i++)
 			{
-				var line = $"xxxxxxxxx {i} xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\r\n";
+				var line = $"xxxxxxxxx {i} {manyXs}{manyXs}{manyXs} ABCDEF abcdef {manyXs}{manyXs}{manyXs}\r\n";
 				var bytes = Encoding.UTF8.GetBytes(line);
 				await file.WriteAsync(bytes);
 			}
@@ -85,6 +102,27 @@ namespace Tkuri2010.Fsuty.Text.Std
 					Console.WriteLine(line);
 				}
 			}
+		}
+
+
+		public static void TryUseMemMapFileViewStream()
+		{
+			using var mmf = System.IO.MemoryMappedFiles.MemoryMappedFile.CreateFromFile("r:/15.txt");
+			using var strm1 = mmf.CreateViewStream(0, 3);
+			using var strm2 = mmf.CreateViewStream(3, 3);
+
+			int c = 0;
+
+			strm2.Position = 1;
+			c = strm2.ReadByte();
+			Console.WriteLine($"char = {Char.ConvertFromUtf32(c)}");
+
+			c = strm2.ReadByte();
+			Console.WriteLine($"char = {Char.ConvertFromUtf32(c)}");
+
+			strm2.Position = 0;
+			c = strm2.ReadByte();
+			Console.WriteLine($"char = {Char.ConvertFromUtf32(c)}");
 		}
 
 		#endregion
