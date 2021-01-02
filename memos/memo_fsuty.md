@@ -40,3 +40,25 @@
 
 3つのピリオドは特別な効力を持たないらしい。
 
+
+## `Path.Combine(path1, path2)` の挙動
+
+|path1|path2|result|
+|-----|-----|------|
+| `c:/base` | `dir` | `c:/base\dir` |
+| `c:/base/` | `dir` | `c:/base/dir` |
+| `c:\base` | `.` | `c:\base\.` |
+| `c:\base` | `..\..\dir1` | `c:\base\..\..\dir1` |
+
+基本的に単純に文字列を連結するのみ。ディレクトリセパレータが必要そうであれば、ちょっと補うのみ。
+
+以下は、`path1` は完全に無視され、戻り値として `path2` がそのまま出力される。
+
+|path1|path2|result|
+|-----|-----|------|
+| `c:\base` | `/.` | `/.` |
+| `c:\base` | `\.` | `\.` |
+| `c:\base` | `/dir1` | `/dir1` |
+| `c:\base` | `d:dir1` | `d:dir1` |
+| `c:\base` | `\\?\server\share-name\dir1` | `\\?\server\share-name\dir1` |
+

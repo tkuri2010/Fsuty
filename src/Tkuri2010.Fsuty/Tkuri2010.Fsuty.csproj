@@ -10,7 +10,7 @@
 	<PackageLicenseExpression>MIT</PackageLicenseExpression>
 
     <TargetFrameworks>netstandard2.1</TargetFrameworks>
-    <LangVersion>8.0</LangVersion>
+    <LangVersion>9.0</LangVersion>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 

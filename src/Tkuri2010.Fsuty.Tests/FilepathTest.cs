@@ -11,7 +11,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_Empty()
 		{
 			var path = Filepath.Parse("");
-			Assert.IsTrue(path.Prefix is PathPrefix.Empty);
+			Assert.IsTrue(path.Prefix is PathPrefix.None);
 			Assert.AreEqual("", path.ToString());
 		}
 
@@ -20,7 +20,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_Simple_0()
 		{
 			var path = Filepath.Parse("/");
-			Assert.IsTrue(path.Absolute);
+			Assert.IsTrue(path.IsAbsolute);
 			Assert.AreEqual("/", path.ToString("/"));
 			Assert.AreEqual("\\", path.ToString("\\"));
 		}
@@ -30,7 +30,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_Simple_Afile()
 		{
 			var path = Filepath.Parse("file.txt");
-			Assert.IsFalse(path.Absolute);
+			Assert.IsFalse(path.IsAbsolute);
 			Assert.AreEqual("file.txt", path.ToString("/"));
 		}
 
@@ -39,9 +39,9 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_Simple_1()
 		{
 			var path = Filepath.Parse("a/b/c.tar.gz");
-			Assert.IsTrue(path.Prefix is PathPrefix.Empty);
-			Assert.IsFalse(path.Absolute);
-			Assert.AreEqual(3, path.Items.Length);
+			Assert.IsTrue(path.Prefix is PathPrefix.None);
+			Assert.IsFalse(path.IsAbsolute);
+			Assert.AreEqual(3, path.Items.Count);
 			Assert.AreEqual("a", path.Items[0]);
 			Assert.AreEqual("b", path.Items[1]);
 			Assert.AreEqual("c.tar.gz", path.Items[2]);
@@ -53,8 +53,8 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_Simple_2()
 		{
 			var path = Filepath.Parse(@"a/\/b///c/\/\/");
-			Assert.IsFalse(path.Absolute);
-			Assert.AreEqual(3, path.Items.Length);
+			Assert.IsFalse(path.IsAbsolute);
+			Assert.AreEqual(3, path.Items.Count);
 			Assert.AreEqual("c", path.Items[2]);
 		}
 
@@ -63,9 +63,9 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_Simple_Absolute_1()
 		{
 			var path = Filepath.Parse("/");
-			Assert.IsTrue(path.Prefix is PathPrefix.Empty);
-			Assert.IsTrue(path.Absolute);
-			Assert.AreEqual(0, path.Items.Length);
+			Assert.IsTrue(path.Prefix is PathPrefix.None);
+			Assert.IsTrue(path.IsAbsolute);
+			Assert.AreEqual(0, path.Items.Count);
 			Assert.AreEqual("/", path.ToString("/"));
 		}
 
@@ -76,9 +76,9 @@ namespace Tkuri2010.Fsuty.Tests
 			Action<string> test_ = pathStr =>
 			{
 				var path = Filepath.Parse(pathStr);
-				Assert.IsTrue(path.Prefix is PathPrefix.Empty);
-				Assert.IsTrue(path.Absolute);
-				Assert.AreEqual(3, path.Items.Length);
+				Assert.IsTrue(path.Prefix is PathPrefix.None);
+				Assert.IsTrue(path.IsAbsolute);
+				Assert.AreEqual(3, path.Items.Count);
 				Assert.AreEqual("/usr/local/bin", path.ToString("/"));
 			};
 
@@ -92,13 +92,12 @@ namespace Tkuri2010.Fsuty.Tests
 		{
 			{ // relative
 				var path = Filepath.Parse(@"c:");
-
 				var prefix = path.Prefix as Dos;
 				Assert.IsNotNull(prefix);
 				Assert.AreEqual("c:", prefix!.Drive);
 				Assert.AreEqual("C", prefix!.DriveLetter.ToUpper());
-				Assert.IsFalse(path.Absolute);
-				Assert.AreEqual(0, path.Items.Length);
+				Assert.IsFalse(path.IsAbsolute);
+				Assert.AreEqual(0, path.Items.Count);
 			}
 
 			{ // absolute
@@ -108,8 +107,8 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.IsNotNull(prefix);
 				Assert.AreEqual("z:", prefix!.Drive);
 				Assert.AreEqual("Z", prefix!.DriveLetter.ToUpper());
-				Assert.IsTrue(path.Absolute);
-				Assert.AreEqual(0, path.Items.Length);
+				Assert.IsTrue(path.IsAbsolute);
+				Assert.AreEqual(0, path.Items.Count);
 			}
 		}
 
@@ -120,8 +119,8 @@ namespace Tkuri2010.Fsuty.Tests
 			Action<string> test_ = pathStr =>
 			{
 				var path = Filepath.Parse(pathStr);
-				Assert.IsTrue(path.Absolute);
-				Assert.AreEqual(1, path.Items.Length);
+				Assert.IsTrue(path.IsAbsolute);
+				Assert.AreEqual(1, path.Items.Count);
 			};
 
 			test_(@"C:\a");
@@ -137,14 +136,14 @@ namespace Tkuri2010.Fsuty.Tests
 		{
 			{
 				var path = Filepath.Parse(@"c:a\b\");
-				Assert.IsFalse(path.Absolute);
-				Assert.AreEqual(2, path.Items.Length);
+				Assert.IsFalse(path.IsAbsolute);
+				Assert.AreEqual(2, path.Items.Count);
 			}
 
 			{
 				var path = Filepath.Parse(@"c:a\b.txt");
-				Assert.IsFalse(path.Absolute);
-				Assert.AreEqual(2, path.Items.Length);
+				Assert.IsFalse(path.IsAbsolute);
+				Assert.AreEqual(2, path.Items.Count);
 			}
 		}
 
@@ -159,7 +158,7 @@ namespace Tkuri2010.Fsuty.Tests
 				var prefix = path.Prefix as DosDevice;
 				Assert.IsNotNull(prefix);
 				Assert.AreEqual("foo", prefix!.Volume);
-				Assert.AreEqual(2, path.Items.Length);
+				Assert.AreEqual(2, path.Items.Count);
 				Assert.AreEqual("bar", path.Items[0]);
 				Assert.AreEqual("baz", path.Items[1]);
 			};
@@ -183,7 +182,7 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.AreEqual("C", prefix!.DriveLetter);
 				Assert.AreEqual("C:", prefix!.Drive);
 				Assert.AreEqual("C:", prefix!.Volume);
-				Assert.AreEqual(2, path.Items.Length);
+				Assert.AreEqual(2, path.Items.Count);
 				Assert.AreEqual("bar", path.Items[0]);
 				Assert.AreEqual("baz", path.Items[1]);
 			};
@@ -207,7 +206,7 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.AreEqual("foo", prefix!.Server);
 				Assert.AreEqual("bar", prefix!.Share);
 				Assert.AreEqual(@"foo\bar", prefix.Volume);
-				Assert.AreEqual(1, path.Items.Length);
+				Assert.AreEqual(1, path.Items.Count);
 				Assert.AreEqual("baz", path.Items[0]);
 			};
 
@@ -226,12 +225,12 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.IsNotNull(prefix);
 				Assert.AreEqual("system7", prefix!.Server);
 				Assert.AreEqual("C$", prefix!.Share);
-				Assert.AreEqual(0, path.Items.Length);
+				Assert.AreEqual(0, path.Items.Count);
 			}
 
 			{
 				var path = Filepath.Parse(@"\\localhost\share-name\dir\file.txt");
-				Assert.AreEqual(2, path.Items.Length);
+				Assert.AreEqual(2, path.Items.Count);
 				Assert.AreEqual("file.txt", path.Items[1]);
 			}
 		}
@@ -347,7 +346,7 @@ namespace Tkuri2010.Fsuty.Tests
 			}
 		}
 
-
+#if false  // 文字列を指定できる Combine() は一旦廃止
 		[TestMethod]
 		public void Test_Combine()
 		{
@@ -364,7 +363,7 @@ namespace Tkuri2010.Fsuty.Tests
 				var prefix = basepath.Prefix as Dos;
 				Assert.AreEqual("c", prefix!.DriveLetter);
 
-				Assert.AreEqual(3, path.Items.Length);
+				Assert.AreEqual(3, path.Items.Count);
 				Assert.AreEqual("dir1", path.Items[0]);
 				Assert.AreEqual("dir2", path.Items[1]);
 				Assert.AreEqual("dir3", path.Items[2]);
@@ -374,14 +373,14 @@ namespace Tkuri2010.Fsuty.Tests
 
 			{
 				var path = basepath.Combine("dir3/file.txt");
-				Assert.AreEqual(4, path.Items.Length);
+				Assert.AreEqual(4, path.Items.Count);
 				Assert.AreEqual("file.txt", path.Items[3]);
 			}
 
 			{
 				var path = basepath.Combine(@"d:\");
 				Assert.AreEqual("d", (path.Prefix as Dos)!.DriveLetter);
-				Assert.AreEqual(0, path.Items.Length);
+				Assert.AreEqual(0, path.Items.Count);
 			}
 
 			{
@@ -391,7 +390,7 @@ namespace Tkuri2010.Fsuty.Tests
 
 				#region detail
 				Assert.AreEqual("d", (path.Prefix as Dos)!.DriveLetter);
-				Assert.AreEqual(2, path.Items.Length);
+				Assert.AreEqual(2, path.Items.Count);
 				Assert.AreEqual("dirX", path.Items[0]);
 				Assert.AreEqual("dirY", path.Items[1]);
 				#endregion
@@ -404,7 +403,7 @@ namespace Tkuri2010.Fsuty.Tests
 
 				#region detail
 				Assert.AreEqual("d", (path.Prefix as Dos)!.DriveLetter);
-				Assert.AreEqual(2, path.Items.Length);
+				Assert.AreEqual(2, path.Items.Count);
 				Assert.AreEqual("dir1", path.Items[0]);
 				Assert.AreEqual("dir2", path.Items[1]);
 				#endregion
@@ -417,10 +416,29 @@ namespace Tkuri2010.Fsuty.Tests
 
 				#region detail
 				Assert.AreEqual("d", (path.Prefix as Dos)!.DriveLetter);
-				Assert.AreEqual(4, path.Items.Length);
+				Assert.AreEqual(4, path.Items.Count);
 				Assert.AreEqual("dir3", path.Items[2]);
 				Assert.AreEqual("dir4", path.Items[3]);
 				#endregion
+			}
+		}
+#endif
+
+
+		[TestMethod]
+		public void Test_Combine()
+		{
+			var basepath = Filepath.Parse(@"d:\dir1/dir2");
+
+			{
+				var subpath = Filepath.Parse("dir3/dir4");
+
+				var path = basepath.Combine(subpath.Items);
+
+				Assert.AreEqual("d", (path.Prefix as Dos)!.DriveLetter);
+				Assert.AreEqual(4, path.Items.Count);
+				Assert.AreEqual("dir3", path.Items[2]);
+				Assert.AreEqual("dir4", path.Items[3]);
 			}
 		}
 
@@ -445,82 +463,82 @@ namespace Tkuri2010.Fsuty.Tests
 
 			{
 				var path = basepath.Slice(0);
-				Assert.IsTrue(path.Absolute);
+				Assert.IsTrue(path.IsAbsolute);
 				Assert.AreEqual("/home/kuma/foo/bar/baz.txt", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(1);
-				Assert.IsFalse(path.Absolute);
+				Assert.IsFalse(path.IsAbsolute);
 				Assert.AreEqual("kuma/foo/bar/baz.txt", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(-1);
-				Assert.IsFalse(path.Absolute);
-				Assert.AreEqual(1, path.Items.Length);
+				Assert.IsFalse(path.IsAbsolute);
+				Assert.AreEqual(1, path.Items.Count);
 				Assert.AreEqual("baz.txt", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(-2);
-				Assert.IsFalse(path.Absolute);
-				Assert.AreEqual(2, path.Items.Length);
+				Assert.IsFalse(path.IsAbsolute);
+				Assert.AreEqual(2, path.Items.Count);
 				Assert.AreEqual("bar/baz.txt", path.ToString("/"));
 			}
 
 			// 2引数
 			{
 				var path = basepath.Slice(0, 0);
-				Assert.IsTrue(path.Absolute);
+				Assert.IsTrue(path.IsAbsolute);
 				Assert.AreEqual("/", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(0, 1);
-				Assert.IsTrue(path.Absolute);
+				Assert.IsTrue(path.IsAbsolute);
 				Assert.AreEqual("/home", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(0, 2);
-				Assert.IsTrue(path.Absolute);
+				Assert.IsTrue(path.IsAbsolute);
 				Assert.AreEqual("/home/kuma", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(1, 2);
-				Assert.IsFalse(path.Absolute);
+				Assert.IsFalse(path.IsAbsolute);
 				Assert.AreEqual("kuma/foo", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(2, 2);
-				Assert.IsFalse(path.Absolute);
+				Assert.IsFalse(path.IsAbsolute);
 				Assert.AreEqual("foo/bar", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(0, -1);
-				Assert.IsTrue(path.Absolute);
+				Assert.IsTrue(path.IsAbsolute);
 				Assert.AreEqual("/home/kuma/foo/bar", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(0, -2);
-				Assert.IsTrue(path.Absolute);
+				Assert.IsTrue(path.IsAbsolute);
 				Assert.AreEqual("/home/kuma/foo", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(1, -2);
-				Assert.IsFalse(path.Absolute);
+				Assert.IsFalse(path.IsAbsolute);
 				Assert.AreEqual("kuma/foo", path.ToString("/"));
 			}
 
 			{
 				var path = basepath.Slice(2, -2);
-				Assert.IsFalse(path.Absolute);
+				Assert.IsFalse(path.IsAbsolute);
 				Assert.AreEqual("foo", path.ToString("/"));
 			}
 		}
@@ -541,7 +559,7 @@ namespace Tkuri2010.Fsuty.Tests
 		{
 			{
 				var src1 = FilepathScanner._Prepare(@"\\.\foo");
-				var m1 = DosDevice.PREFIX_PATTERN.Match(src1);
+				var m1 = DosDevice.PrefixPattern.Match(src1);
 				Assert.IsTrue(m1.Success);
 				Assert.AreEqual(@".", m1.Groups[1].Value);
 				Assert.AreEqual(@"/foo", src1.Substring(m1.Length));
@@ -549,7 +567,7 @@ namespace Tkuri2010.Fsuty.Tests
 
 			{
 				var src2 = FilepathScanner._Prepare(@"\\?\foo");
-				var m2 = DosDevice.PREFIX_PATTERN.Match(src2);
+				var m2 = DosDevice.PrefixPattern.Match(src2);
 				Assert.IsTrue(m2.Success);
 				Assert.AreEqual(@"?", m2.Groups[1].Value);
 				Assert.AreEqual(@"/foo", src2.Substring(m2.Length));
