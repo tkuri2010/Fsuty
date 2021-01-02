@@ -431,6 +431,27 @@ namespace Tkuri2010.Fsuty.Tests
 			var basepath = Filepath.Parse(@"d:\dir1/dir2");
 
 			{
+				var subpath = Filepath.Empty;
+
+				var path = basepath.Combine(subpath.Items);
+
+				Assert.AreEqual("d", (path.Prefix as Dos)!.DriveLetter);
+				Assert.AreEqual(2, path.Items.Count);
+				Assert.AreEqual("dir2", path.LastItem);
+			}
+
+			{
+				var subpath = Filepath.Parse("//server/share-name");
+				Assert.IsTrue(subpath.Prefix is PathPrefix.Unc);
+
+				var path = basepath.Combine(subpath.Items);
+
+				Assert.AreEqual("d", (path.Prefix as Dos)!.DriveLetter);
+				Assert.AreEqual(2, path.Items.Count);
+				Assert.AreEqual("dir2", path.LastItem);
+			}
+
+			{
 				var subpath = Filepath.Parse("dir3/dir4");
 
 				var path = basepath.Combine(subpath.Items);

@@ -662,7 +662,7 @@ namespace Tkuri2010.Fsuty.PathPrefix
 
 	/// <summary>
 	/// - "\\?\UNC\server\share-name\foo\bar.txt"
-	/// - "//?\UNC/127.0.0.1/share-name/foo/bar.txt" (forward slash allowed)
+	/// - "\\?\UNC\127.0.0.1\share-name\foo\bar.txt"
 	/// </summary>
 	public class DosDeviceUnc : IDosDevice, IShared
 	{
@@ -725,6 +725,9 @@ namespace Tkuri2010.Fsuty.PathPrefix
 	}
 
 
+	/// <summary>
+	/// - "\\server\share-name\dir\file.txt"
+	/// </summary>
 	public class Unc : IPathPrefix, IShared
 	{
 		/// <summary>
