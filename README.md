@@ -72,28 +72,6 @@ more formats are supported:
 	}
 ```
 
-#### Known Issue
-
-On Unix-like system, you can create a file system entry that the name contains '\\' (U+005c).
-```
-# mkdir a\\b\\c
-# ll
-total 4
-drwxr-xr-x. 2 root root  6 Jam 2 17:14 a\b\c       <-- like this
--rw-------. 1 root root 12 Jan 2 17:00 lol.txt
-```
-
-but, even if it's on a Unix-like system...
-```cs
-var abc = Filepath.Parse(@"a\b\c");
-Console.WriteLine(abc.Items.Count); //=> 3
-Console.WriteLine(abc.Items[0]);  //=> a
-Console.WriteLine(abc.Items[1]);  //=> b
-Console.WriteLine(abc.Items[2]);  //=> c
-Console.WriteLine(abc.ToString("/")); //=> a/b/c
-```
-Maybe this is not a so difficult problem, but I'm not sure how to detect it's on a Windows or Unix... Can `System.IO.Path.DirectorySeparatorChar` help me? Any way, I'm not sure...
-
 
 #### `Combine()` -- Why don't we have convenient `Combine(Filepath)` nor `Combine(string)` methods?
 
