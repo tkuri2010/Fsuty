@@ -52,6 +52,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_Simple_2()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			var path = Filepath.Parse(@"a/\/b///c/\/\/");
 			Assert.IsFalse(path.IsAbsolute);
 			Assert.AreEqual(3, path.Items.Count);
@@ -669,6 +674,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_PrefixOfDosDevice_Regex()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			{
 				var src1 = FilepathScanner._Prepare(@"\\.\foo");
 				var m1 = DosDevice.PrefixPattern.Match(src1);
@@ -690,6 +700,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_PrefixDosDevice_1()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			var src = @"\\.\";
 			var scan = new FilepathScanner(src);
 
@@ -700,6 +715,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_PrefixDosDevice_Drive_1()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			Action<string> test_ = srcStr =>
 			{
 				var scan = new FilepathScanner(srcStr);
@@ -716,6 +736,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_PrefixDosDevice_UNC1()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			var src = @"\\.\UNC";
 			var scan = new FilepathScanner(src);
 
@@ -726,6 +751,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_PrefixDosDevice_UNC2()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			var src = @"\\.\UNC\127.0.0.1";
 			var scan = new FilepathScanner(src);
 
@@ -739,6 +769,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_PrefixDosDevice_UNC3()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			var src = @"\\?\UNC\127.0.0.1\share-name";
 			var scan = new FilepathScanner(src);
 
@@ -752,6 +787,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_PrefixDosDevice_Normal1()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			var src = @"\\.\C:\dir\file.txt";
 			var scan = new FilepathScanner(src);
 
@@ -763,6 +803,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_PrefixDosDevice_Normal2()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			var src = @"\\.\Volume{xxx-xxx-xxx}\dir\file.txt";
 			var scan = new FilepathScanner(src);
 
@@ -774,6 +819,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_PrefixJustUnc_1()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			var src = @"\\server\C$";
 			var scan = new FilepathScanner(src);
 
@@ -786,6 +836,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_PrefixJustUnc_2()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			var src = @"\\server\share-name\dir\file.txt";
 			var scan = new FilepathScanner(src);
 
