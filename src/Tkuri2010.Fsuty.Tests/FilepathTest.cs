@@ -90,6 +90,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_TraditionalDos_1()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			{ // relative
 				var path = Filepath.Parse(@"c:");
 				var prefix = path.Prefix as Dos;
@@ -116,6 +121,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_TraditionalDos_2()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			Action<string> test_ = pathStr =>
 			{
 				var path = Filepath.Parse(pathStr);
@@ -134,6 +144,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_TraditionalDos_3()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			{
 				var path = Filepath.Parse(@"c:a\b\");
 				Assert.IsFalse(path.IsAbsolute);
@@ -151,6 +166,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_DosDevice_1()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			Action<string> test_ = pathStr =>
 			{
 				var path = Filepath.Parse(pathStr);
@@ -173,6 +193,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_DosDevice_2_Drive()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			Action<string> test_ = pathStr =>
 			{
 				var path = Filepath.Parse(pathStr);
@@ -197,6 +222,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_DosDevice_2_UNC()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			Action<string> test_ = pathStr =>
 			{
 				var path = Filepath.Parse(pathStr);
@@ -218,6 +248,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_UNC_1()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			{
 				var path = Filepath.Parse(@"\\system7\C$");
 
@@ -321,11 +356,6 @@ namespace Tkuri2010.Fsuty.Tests
 			}
 
 			{
-				var path = Filepath.Parse("c:/dir/.git");
-				Assert.AreEqual(string.Empty, path.LastItemWithoutExtension);
-			}
-
-			{
 				var path = Filepath.Parse("/dir/.tar.gz");
 				Assert.AreEqual(".tar", path.LastItemWithoutExtension);
 			}
@@ -343,6 +373,17 @@ namespace Tkuri2010.Fsuty.Tests
 			{
 				var path = Filepath.Parse("/usr/bin/file.txt");
 				Assert.AreEqual("file", path.LastItemWithoutExtension);
+			}
+
+			{
+				var path = Filepath.Parse("/dir/.git");
+				Assert.AreEqual(string.Empty, path.LastItemWithoutExtension);
+			}
+
+			if (PathLogics.SeemsWin32FileSystem)
+			{
+				var path = Filepath.Parse("c:/dir/.git");
+				Assert.AreEqual(string.Empty, path.LastItemWithoutExtension);
 			}
 		}
 
@@ -428,6 +469,11 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public void Test_Combine()
 		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
 			var basepath = Filepath.Parse(@"d:\dir1/dir2");
 
 			{
@@ -563,6 +609,51 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.AreEqual("foo", path.ToString("/"));
 			}
 		}
+
+		[TestMethod]
+		public void Test_Slice_2_WithPrefix()
+		{
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return;
+			}
+
+			var basepath = Filepath.Parse(@"C:\home\kuma\foo\bar\baz.txt");
+
+			// 色々なパラメータを入力しても
+			// へんな例外が発生しなければOK
+			{
+				for (var c = -20; c < 20; c++)
+				{
+					for (var s = -20; s < 20; s++)
+					{
+						var path = basepath.Slice(s, c);
+						Assert.IsTrue(true);
+					}
+				}
+			}
+
+			{ // Slice(0) ... 実質、何も変わらないはず
+				var path = basepath.Slice(0);
+				Assert.IsInstanceOfType(path.Prefix, typeof(PathPrefix.Dos));
+				Assert.AreEqual((path.Prefix as PathPrefix.Dos)!.DriveLetter.ToLower(), "c");
+
+				Assert.IsTrue(path.IsAbsolute);
+				Assert.AreEqual(path.Items[0], "home");
+				Assert.AreEqual(path.Items[4], "baz.txt");
+			}
+
+			{ // Slice(1) ... 相対パスを表すようになるはず
+				var path = basepath.Slice(1);
+				Assert.IsInstanceOfType(path.Prefix, typeof(PathPrefix.Dos));
+				Assert.AreEqual((path.Prefix as PathPrefix.Dos)!.DriveLetter.ToLower(), "c");
+
+				Assert.IsFalse(path.IsAbsolute);
+				Assert.AreEqual(path.Items[0], "kuma");
+				Assert.AreEqual(path.Items[3], "baz.txt");
+			}
+		}
+
 
 
 		[TestMethod]

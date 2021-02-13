@@ -52,7 +52,7 @@ namespace Tkuri2010.Fsuty.Xmp
 			{
 				if (e.Event == FsentryEvent.EnterDir)
 				{
-					Console.WriteLine($"ENTER: {e.Path}");
+					Console.WriteLine($"ENTER: {e.FullPathString}");
 
 					// you can do this:
 					// if (ShouldSkip(e.Path))
@@ -64,11 +64,11 @@ namespace Tkuri2010.Fsuty.Xmp
 				}
 				else if (e.Event == FsentryEvent.File)
 				{
-					Console.WriteLine($"FILE : {e.Path}");
+					Console.WriteLine($"FILE : {e.FullPathString}");
 				}
 				else if (e.Event == FsentryEvent.LeaveDir)
 				{
-					Console.WriteLine($"LEAVE: {e.Path}");
+					Console.WriteLine($"LEAVE: {e.FullPathString}");
 				}
 			}
 		}
