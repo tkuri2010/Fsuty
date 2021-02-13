@@ -12,12 +12,61 @@ namespace Tkuri2010.Fsuty
 		public static readonly ReadOnlyCollection<string> EmptyStringArray = new(new string[0]{ });
 
 
+		public enum FileSystemSeems
+		{
+			_Unknown,
+			Unix,
+			Win32,
+		}
+
+
+		public static FileSystemSeems DetectFileSystem()
+		{
+			var c1 = System.IO.Path.DirectorySeparatorChar;
+			var c2 = System.IO.Path.AltDirectorySeparatorChar;
+			var v = System.IO.Path.VolumeSeparatorChar;
+			if (c1 == '/' && c2 == '/' && v == '/')
+			{
+				return FileSystemSeems.Unix;
+			}
+
+			if (((c1 == '/' && c2 == '\\') || (c1 == '\\' && c2 == '/'))
+				&& v == ':')
+			{
+				return FileSystemSeems.Win32;
+			}
+
+			return FileSystemSeems._Unknown;
+		}
+
+
+		private static FileSystemSeems _detectedFileSystem = FileSystemSeems._Unknown;
+
+
+		private static FileSystemSeems _DetectAndCacheFileSystem()
+		{
+			if (_detectedFileSystem == FileSystemSeems._Unknown)
+			{
+				_detectedFileSystem = DetectFileSystem();
+			}
+
+			return _detectedFileSystem;
+		}
+
+
+		public static bool SeemsUnixFileSystem => _DetectAndCacheFileSystem() == FileSystemSeems.Unix;
+
+
+		public static bool SeemsWin32FileSystem => _DetectAndCacheFileSystem() == FileSystemSeems.Win32;
+
+
 		/// <summary>
 		/// 1. マイナスのstartは末尾からの距離と考え、1ステップだけ補正する
 		/// 2. マイナスのcountは、末尾からいくつ削るかの指定とみなす
 		/// 3. 大きなcountは補正する
 		/// 4. 補正後のstartが範囲外の場合はパスを空にする
 		/// </summary>
+		/// <param name="items">アイテム列</param>
 		/// <param name="start">マイナス指定も可</param>
 		/// <param name="count">マイナス指定も可</param>
 		/// <returns></returns>
@@ -55,6 +104,10 @@ namespace Tkuri2010.Fsuty
 		}
 
 
+		/// <summary>
+		/// "item1/./item2"  →  "item1/item2"
+		/// "itemA/dir/../itemB"  →  "itemA/itemB"
+		/// </summary>
 		public static IReadOnlyList<string> CanonicalizeItems(IEnumerable<string> items)
 		{
 			var canon = new List<string>();
@@ -243,7 +296,11 @@ namespace Tkuri2010.Fsuty
 
 		static IPathPrefix _ParsePrefix(FilepathScanner aScan)
 		{
-			if (PathPrefix.Dos.TryParse(aScan, out var traDos))
+			if (! PathLogics.SeemsWin32FileSystem)
+			{
+				return PathPrefix.None.Instance;
+			}
+			else if (PathPrefix.Dos.TryParse(aScan, out var traDos))
 			{
 				return traDos!;
 			}
@@ -375,6 +432,10 @@ namespace Tkuri2010.Fsuty
 
 
 		/// <summary>
+		///  var fp = Filepath.Parse(@"C:\d1\d2\d3\file.txt");
+		///  var sub = fp.Slice(1, 2); //=> Prefix="C:",  Items= [ d2, d3 ]
+		///  sub.ToString();  //=> "C:d2/d3"  (a prefix and RELATIVE paths)
+		///
 		/// 1. マイナスのstartは末尾からの距離と考え、1ステップだけ補正する
 		/// 2. マイナスのcountは、末尾からいくつ削るかの指定とみなす
 		/// 3. 大きなcountは補正する
@@ -391,7 +452,7 @@ namespace Tkuri2010.Fsuty
 			{
 				Prefix = this.Prefix,
 
-				// 開始位置が 0 であれば、this.Absolute を踏襲。そうでなければ常に相対パスとなる
+				// 開始位置が 0 であれば、this.IsAbsolute を踏襲。そうでなければ常に相対パスとなる
 				IsAbsolute = (fixedHead == 0) ? this.IsAbsolute : false,
 
 				Items = Items.SliceItems(start, count),
@@ -438,28 +499,28 @@ namespace Tkuri2010.Fsuty
 		public string Input { get; private set; }
 
 
-		public static string _Prepare(string aInput)
+		public static string _Prepare(string input)
 		{
-			return aInput.Replace('\\', '/');
+			return PathLogics.SeemsWin32FileSystem ? input.Replace('\\', '/')
+				: input;
 		}
 
 
-		public FilepathScanner(string aInput)
+		public FilepathScanner(string input)
 		{
-			Input = _Prepare(aInput);
+			Input = _Prepare(input);
 		}
 
 
-		public bool Skip(Regex aReg)
+		public bool Skip(Regex regex)
 		{
-			Match m;
-			return Skip(aReg, out m);
+			return Skip(regex, out var _m);
 		}
 
 
-		public bool Skip(Regex aReg, out Match oMatchResult)
+		public bool Skip(Regex regex, out Match oMatchResult)
 		{
-			oMatchResult = aReg.Match(Input);
+			oMatchResult = regex.Match(Input);
 
 			if (oMatchResult.Success)
 			{
