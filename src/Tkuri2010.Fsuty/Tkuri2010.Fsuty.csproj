@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Version>1.0.0-zzz</Version>
+    <Version>1.0.0-yay</Version>
 	<Title>Local file system utilities</Title>
 	<Authors>tkuri2010</Authors>
 	<Description>Local file system utilities</Description>

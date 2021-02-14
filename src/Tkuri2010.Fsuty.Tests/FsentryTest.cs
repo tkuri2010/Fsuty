@@ -68,6 +68,8 @@ namespace Tkuri2010.Fsuty.Tests
 			// テスト実行。見つかったディレクトリやファイルを変数 pathSet から消していく
 			await foreach (var entry in Fsentry.VisitAsync(temp))
 			{
+				Assert.IsFalse(entry.RelativeParent.IsAbsolute);
+
 				var fileName = System.IO.Path.GetFileName(entry.FullPathString);
 				var relPathStr = entry.RelativeParent.Combine(_AsItems(fileName)).ToString("/");
 
@@ -115,6 +117,8 @@ namespace Tkuri2010.Fsuty.Tests
 			var skipCount = 0;
 			await foreach (var entry in Fsentry.VisitAsync(temp))
 			{
+				Assert.IsFalse(entry.RelativeParent.IsAbsolute);
+
 				var fileName = System.IO.Path.GetFileName(entry.FullPathString);
 				var relPathStr = entry.RelativeParent.Combine(_AsItems(fileName)).ToString("/");
 

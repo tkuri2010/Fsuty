@@ -3,7 +3,24 @@ Local Files and Directories Utility (Path descriptor, Directory tree walker, etc
 
 ## Classes
 
-### `Filepath` (namespace `Tkuri2010.Fsuty`)
+- `Filepath` (namespace `Tkuri2010.Fsuty`)
+	- File path parser / descriptor
+- `Fsentry` (namespace `Tkuri2010.Fsuty`)
+	- Files and directories enumeration utility.
+
+## How to use in your project.
+
+I'm not sure yet that this is a library worth publishing on nuget.
+
+How to get the `*.nupkg`:
+
+```ps
+PS> cd src\Tkuri2010.Fsuty
+
+PS> dotnet pack -c Release
+```
+
+## `Filepath` (namespace `Tkuri2010.Fsuty`)
 
 File path parser / descriptor.
 ```cs
@@ -73,7 +90,7 @@ more formats are supported:
 ```
 
 
-#### `Combine()` -- Why don't we have convenient `Combine(Filepath)` nor `Combine(string)` methods?
+### `Combine()` -- Why don't we have convenient `Combine(Filepath)` nor `Combine(string)` methods?
 
 We have only `Combine(PathItems)` method.
 ```cs
@@ -124,10 +141,10 @@ Refer to the `System.IO.Path.Combine()`:
 ```
 Did you expect this behavior? I don't like this.
 
-I don't provide the `Combine(Filepath)` nor `Combine(string)` methods so that we can remember that the `Combine(PathItems)` method takes a (relative) path-items-object only.
+I don't provide `Combine(Filepath)` nor `Combine(string)` methods so that we can remember that the `Combine(PathItems)` method takes a (relative) path-items-object ONLY.
 
 
-### `Fsentry` (namespace `Tkuri2010.Fsuty`)
+## `Fsentry` (namespace `Tkuri2010.Fsuty`)
 
 Files and directories enumeration utility. Supports [Asynchronous streams](https://docs.microsoft.com/ja-jp/dotnet/csharp/whats-new/csharp-8#asynchronous-streams).
 
