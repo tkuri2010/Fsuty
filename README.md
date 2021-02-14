@@ -132,31 +132,37 @@ I don't provide the `Combine(Filepath)` nor `Combine(string)` methods so that we
 Files and directories enumeration utility. Supports [Asynchronous streams](https://docs.microsoft.com/ja-jp/dotnet/csharp/whats-new/csharp-8#asynchronous-streams).
 
 ```cs
-	async Task DoMyWorkAsync(Filepath path, [EnumeratorCancellation] CancellationToken ct = default)
+	async Task DoMyWorkAsync(Filepath baseDir, [EnumeratorCancellation] CancellationToken ct = default)
 	{
 		// for example, we want to collect 100 files.
 		var first100Files = new List<Filepath>();
 
-		await foreach (var item in Fsentry.VisitAsync(path, ct))
+		await foreach (var item in Fsentry.VisitAsync(baseDir, ct))
 		{
+
+			// ex)
+			//   baseDir =>  F:\our\works
+			//   item.FullPathString =>  "F:\our\works\dir\more_dir\file.txt" (string)
+			//   item.RelativeParent =>  "dir\more_dir" (Filepath object)
+
 			if (item.Event == FsentryEvent.EnterDir)
 			{
 				// we can skip walking on the specified directory.
-				if (item.Path.EndsWith(".git"))
+				if (item.FullPathString.EndsWith(".git"))
 				{
-					item.Command = FsentryCommand.Skip;
+					item.Command = FsentryCommand.SkipDirectory;
 					continue;
 				}
 
-				Console.WriteLine($"Enter Dir: {item.Path}");
+				Console.WriteLine($"Enter Dir: {item.FullPathString}");
 			}
 			else if (item.Event == FsentryEvent.LeaveDir)
 			{
-				Console.WriteLine($"Leave Dir: {item.Path}");
+				Console.WriteLine($"Leave Dir: {item.FullPathString}");
 			}
 			else // if (item.Event == FsentryEvent.File)
 			{
-				first100Files.Add(item.Path);
+				first100Files.Add(item.FullPathString);
 				if (100 <= first100Files.Count)
 				{
 					break;

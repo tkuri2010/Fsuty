@@ -34,7 +34,7 @@ namespace Tkuri2010.Fsuty
 
 	public enum FsentryCommand
 	{
-		Continue,
+		Advance,
 
 		SkipDirectory,
 	}
@@ -79,7 +79,7 @@ namespace Tkuri2010.Fsuty
 
 				q.PushLeavingDir(entry);
 
-				if (entry.Command == FsentryCommand.Continue)
+				if (entry.Command == FsentryCommand.Advance)
 				{
 					var name = Filepath.Parse(Path.GetFileName(entry.FullPathString));
 					var relativeDir = entry.RelativeParent.Combine(name.Items);
@@ -99,7 +99,7 @@ namespace Tkuri2010.Fsuty
 
 		public Filepath RelativeParent { get; private set; }
 
-		public FsentryCommand Command  { get; set; } = FsentryCommand.Continue;
+		public FsentryCommand Command  { get; set; } = FsentryCommand.Advance;
 
 		internal Fsentry(FsentryEvent ev, string rawFullPathString, Filepath relativeParentDir)
 		{
