@@ -55,7 +55,7 @@ namespace Tkuri2010.Fsuty.Xmp
 					Console.WriteLine($"ENTER: {e.FullPathString}");
 
 					// you can do this:
-					// if (ShouldSkip(e.Path))
+					// if (ShouldSkip(e.RelativePath))
 					// {
 					//     Console.WriteLine($"skip visiting into the dir:{e.RelativePath}");
 					//     e.Command = FentryCommand.SkipDirectory;

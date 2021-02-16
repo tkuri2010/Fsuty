@@ -1,3 +1,19 @@
+## C# 9.0 からの `init` が使えない
+
+```cs
+class Foo
+{
+    public string Prop { get; init; }
+    //                        ~~~~  CS0518
+    //      定義済みの型 'System.Runtime.CompilerServices.IsExternalInit' は
+    //      定義、またはインポートされていません
+}
+```
+
+https://github.com/dotnet/roslyn/issues/45510#issuecomment-725091019
+
+
+
 ## `PathCanonicalize` (shlwapi.dll / Win10) の挙動
 
 ```c++
@@ -61,4 +77,5 @@
 | `c:\base` | `/dir1` | `/dir1` |
 | `c:\base` | `d:dir1` | `d:dir1` |
 | `c:\base` | `\\?\server\share-name\dir1` | `\\?\server\share-name\dir1` |
+
 

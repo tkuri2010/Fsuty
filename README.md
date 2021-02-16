@@ -158,9 +158,9 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 		{
 
 			// ex)
-			//   baseDir =>  F:\our\works
-			//   item.FullPathString =>  "F:\our\works\dir\more_dir\file.txt" (string)
-			//   item.RelativeParent =>  "dir\more_dir" (Filepath object)
+			//   baseDir (argument)   =>  "F:\our\works"
+			//   item.FullPathString  =>  "F:\our\works\dir\more_dir\file.txt" (string)
+			//   item.RelativePath    =>               "dir\more_dir\file.txt" (Filepath object)
 
 			if (item.Event == FsentryEvent.EnterDir)
 			{

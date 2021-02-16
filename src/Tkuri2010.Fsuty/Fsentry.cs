@@ -82,7 +82,7 @@ namespace Tkuri2010.Fsuty
 				if (entry.Command == FsentryCommand.Advance)
 				{
 					var name = Filepath.Parse(Path.GetFileName(entry.FullPathString));
-					var relativeDir = entry.RelativeParent.Combine(name.Items);
+					var relativeDir = entry.RelativePath.Parent.Combine(name.Items);
 					await q.EnumAndPushAsync(entry.FullPathString, relativeDir, ct);
 				}
 				else // skip requested
@@ -93,19 +93,41 @@ namespace Tkuri2010.Fsuty
 		}
 
 
-		public FsentryEvent Event { get; private set; }
+		public FsentryEvent Event { get; private set; } = FsentryEvent.None;
 
-		public string FullPathString { get; private set; }
+		/// <summary>Raw result value from `System.IO.Directory.Enum***()` </summary>
+		public string FullPathString { get; private set; } = string.Empty;
 
-		public Filepath RelativeParent { get; private set; }
+		public Filepath RelativePath { get; private set; } = Filepath.Empty;
+
+		// public Filepath RelativeParent { get; private set; }
 
 		public FsentryCommand Command  { get; set; } = FsentryCommand.Advance;
+
+
+		internal Fsentry()
+		{
+		}
+
 
 		internal Fsentry(FsentryEvent ev, string rawFullPathString, Filepath relativeParentDir)
 		{
 			Event = ev;
 			FullPathString = rawFullPathString;
-			RelativeParent = relativeParentDir;
+			RelativePath = relativeParentDir.Combine(Filepath.Parse(Path.GetFileName(rawFullPathString)).Items);
+		}
+
+
+		internal static Fsentry AsLeavingDir(Fsentry enteringDir)
+		{
+			// assert: enteringDir.Event == FsentryEvent.EnterDir
+
+			return new()
+			{
+				Event = FsentryEvent.LeaveDir,
+				FullPathString = enteringDir.FullPathString,
+				RelativePath = enteringDir.RelativePath,
+			};
 		}
 	}
 
@@ -132,7 +154,7 @@ namespace Tkuri2010.Fsuty
 
 		internal void PushLeavingDir(Fsentry dirEntry)
 		{
-			mStack.Push(new Fsentry(FsentryEvent.LeaveDir, dirEntry.FullPathString, dirEntry.RelativeParent));
+			mStack.Push(Fsentry.AsLeavingDir(dirEntry));
 		}
 
 		internal Task EnumAndPushAsync(string searchPathStr, Filepath relativeHereDir, CancellationToken ct)
