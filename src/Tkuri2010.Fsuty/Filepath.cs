@@ -11,6 +11,7 @@ namespace Tkuri2010.Fsuty
 	{
 		public static readonly ReadOnlyCollection<string> EmptyStringArray = new(new string[0]{ });
 
+		public static readonly LinkedCollection<string> EmptyStringLinkedCollection = new();
 
 		public enum FileSystemSeems
 		{
@@ -72,13 +73,25 @@ namespace Tkuri2010.Fsuty
 		/// <returns></returns>
 		public static IReadOnlyList<string> SliceItems(IEnumerable<string> items, int start, int count = int.MaxValue)
 		{
-			var fixedHead =  _FixHeadIndex(items.Count(), start);
+			var fixedHead = _FixHeadIndex(items.Count(), start);
 			var fixedTail = _FixTailIndex(items.Count(), fixedHead, count);
 			var fixedCount = fixedTail - fixedHead;
 
 			return (0 <= fixedHead) && (fixedHead < items.Count()) && (1 <= fixedCount)
 					? items.Skip(fixedHead).Take(fixedCount).ToArray()
 					: EmptyStringArray;
+		}
+
+
+		public static LinkedCollection<string> SliceItems(LinkedCollection<string> items, int start, int count = int.MaxValue)
+		{
+			var fixedHead = _FixHeadIndex(items.Count, start);
+			var fixedTail = _FixTailIndex(items.Count, fixedHead, count);
+			var fixedCount = fixedTail - fixedHead;
+
+			return (0 <= fixedHead) && (fixedHead < items.Count) && (1 <= fixedCount)
+					? items.Slice(fixedHead, fixedCount)
+					: EmptyStringLinkedCollection;
 		}
 
 
@@ -129,7 +142,7 @@ namespace Tkuri2010.Fsuty
 		}
 	}
 
-
+#if false
 	public class PathItems : IReadOnlyList<string>
 	{
 		public static readonly PathItems Empty = new();
@@ -231,6 +244,116 @@ namespace Tkuri2010.Fsuty
 		/// <summary>(implements IReadOnlyList)</summary>
 		IEnumerator IEnumerable.GetEnumerator() => _items.GetEnumerator();
 	}
+#else
+	public class PathItems : IReadOnlyList<string>
+	{
+		public static readonly PathItems Empty = new();
+
+
+		private LinkedCollection<string> mItems = PathLogics.EmptyStringLinkedCollection;
+
+
+		internal PathItems()
+		{
+		}
+
+
+		internal PathItems(LinkedCollection<string> items)
+		{
+			mItems = items;
+		}
+
+
+		internal PathItems(IEnumerable<string> items)
+		{
+			mItems = new(items);
+		}
+
+
+		private string? mStringCache = null;
+
+
+		override public string ToString()
+		{
+			if (mStringCache == null)
+			{
+				mStringCache = ToString(System.IO.Path.DirectorySeparatorChar.ToString());
+			}
+			return mStringCache;
+		}
+
+
+		virtual public string ToString(string directorySeparator)
+		{
+			return string.Join(directorySeparator, this);
+		}
+
+
+		public PathItems CombineItems(PathItems items)
+		{
+			if (items.Count == 0)
+			{
+				return this;
+			}
+
+			return new PathItems(mItems.AppendRange(items.mItems));
+		}
+
+
+		/// <summary>
+		/// 1. マイナスのstartは末尾からの距離と考え、1ステップだけ補正する
+		/// 2. マイナスのcountは、末尾からいくつ削るかの指定とみなす
+		/// 3. 大きなcountは補正する
+		/// 4. 補正後のstartが範囲外の場合はパスを空にする
+		/// </summary>
+		/// <param name="start">マイナス指定も可</param>
+		/// <param name="count">マイナス指定も可</param>
+		/// <returns></returns>
+		public PathItems SliceItems(int start, int count = int.MaxValue) =>
+				new PathItems(PathLogics.SliceItems(mItems, start, count));
+
+
+		/// <summary>
+		/// 指定した数だけディレクトリをさかのぼる。Slice(0, -level) と同じ。
+		/// </summary>
+		/// <param name="level">省略時1。何段階ディレクトリをさかのぼるかを指定</param>
+		/// <returns></returns>
+		public PathItems AscendItems(int level = 1) => SliceItems(0, -level);
+
+
+		/// <summary>
+		/// ディレクトリを1段階さかのぼる。Ascemd() と同じ。また、Slice(0, -1) とも同じ。
+		/// </summary>
+		/// <returns></returns>
+		public PathItems ParentItems => AscendItems();
+
+
+		/// <summary>
+		/// "." は削除し、".." は解決する。
+		/// 少なくとも以下の点について、Win32 PathCanonicalize() 互換。
+		/// - 先頭の ".." は削除
+		/// - "..." はそのまま残る
+		/// </summary>
+		/// <returns></returns>
+		public PathItems CanonicalizeItems() => new PathItems(PathLogics.CanonicalizeItems(mItems));
+
+
+		/// <summary>(implements IReadOnlyList)</summary>
+		public int Count => mItems.Count;
+
+
+		/// <summary>(implements IReadOnlyList)</summary>
+		public string this[int index] => mItems[index];
+
+
+		/// <summary>(implements IReadOnlyList)</summary>
+		public IEnumerator<string> GetEnumerator() => mItems.GetEnumerator();
+
+
+		/// <summary>(implements IReadOnlyList)</summary>
+		IEnumerator IEnumerable.GetEnumerator() => mItems.GetEnumerator();
+	}
+#endif
 
 
     public class Filepath

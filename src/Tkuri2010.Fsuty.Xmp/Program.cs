@@ -12,7 +12,8 @@ namespace Tkuri2010.Fsuty.Xmp
     {
         static void Main(string[] args)
         {
-			Xmp1(args);
+			//Xmp1(args);
+			Xmp3().GetAwaiter().GetResult();
 			//Text.Std.LinesProcessorXmp1Grep.TryUseMemMapFileViewStream();
 			//Try_Path_Combine();
         }
@@ -73,6 +74,16 @@ namespace Tkuri2010.Fsuty.Xmp
 			}
 		}
 
+
+		static async Task Xmp3()
+		{
+			var ct = CancellationToken.None;
+			await foreach (var e in Fsentry.VisitAsync("r:/temp/vk_xmp3", ct))
+			{
+				Console.WriteLine(e.FullPathString);
+			}
+		}
+
 #if false
 		[DllImport("shlwapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
 		private static extern bool PathCanonicalize(
@@ -107,7 +118,7 @@ namespace Tkuri2010.Fsuty.Xmp
 #endif
 
 
-#if true
+#if false
 		static void Try_Path_Combine(string path1, string path2)
 		{
 			var rv = System.IO.Path.Combine(path1, path2);

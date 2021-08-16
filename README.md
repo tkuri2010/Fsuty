@@ -20,7 +20,7 @@ PS> cd src\Tkuri2010.Fsuty
 PS> dotnet pack -c Release
 ```
 
-## `Filepath` (namespace `Tkuri2010.Fsuty`)
+## class `Filepath` (namespace `Tkuri2010.Fsuty`)
 
 File path parser / descriptor.
 ```cs
@@ -144,7 +144,7 @@ Did you expect this behavior? I don't like this.
 I don't provide `Combine(Filepath)` nor `Combine(string)` methods so that we can remember that the `Combine(PathItems)` method takes a (relative) path-items-object ONLY.
 
 
-## `Fsentry` (namespace `Tkuri2010.Fsuty`)
+## class `Fsentry` (namespace `Tkuri2010.Fsuty`)
 
 Files and directories enumeration utility. Supports [Asynchronous streams](https://docs.microsoft.com/ja-jp/dotnet/csharp/whats-new/csharp-8#asynchronous-streams).
 
@@ -179,7 +179,7 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 			}
 			else // if (item.Event == FsentryEvent.File)
 			{
-				first100Files.Add(item.FullPathString);
+				first100Files.Add(item.RelativePath);
 				if (100 <= first100Files.Count)
 				{
 					break;
