@@ -12,7 +12,8 @@ namespace Tkuri2010.Fsuty.Xmp
     {
         static void Main(string[] args)
         {
-			Xmp1(args);
+			//Xmp1(args);
+			Xmp3().GetAwaiter().GetResult();
 			//Text.Std.LinesProcessorXmp1Grep.TryUseMemMapFileViewStream();
 			//Try_Path_Combine();
         }
@@ -73,6 +74,32 @@ namespace Tkuri2010.Fsuty.Xmp
 			}
 		}
 
+
+		static async Task Xmp3()
+		{
+			var sw = new System.Diagnostics.Stopwatch();
+			var all = new List<Filepath>();
+			var ct = CancellationToken.None;
+
+			sw.Start();
+
+			await foreach (var e in Fsentry.VisitAsync(@"D:\somewhere", ct))
+			{
+				if (e.Event == FsentryEvent.EnterDir || e.Event == FsentryEvent.File)
+				{
+					Console.WriteLine(e.RelativePath);
+					all.Add(e.RelativePath);
+				}
+			}
+
+			sw.Stop();
+
+			Console.WriteLine("=============================================================");
+			Console.WriteLine("    GetTotalAllocatedBytes       : " + System.GC.GetTotalAllocatedBytes());
+			Console.WriteLine("GetAllocatedBytesForCurrentThread: " + System.GC.GetAllocatedBytesForCurrentThread());
+			Console.WriteLine("            Elapsed              : " + sw.Elapsed);
+		}
+
 #if false
 		[DllImport("shlwapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
 		private static extern bool PathCanonicalize(
@@ -107,7 +134,7 @@ namespace Tkuri2010.Fsuty.Xmp
 #endif
 
 
-#if true
+#if false
 		static void Try_Path_Combine(string path1, string path2)
 		{
 			var rv = System.IO.Path.Combine(path1, path2);

@@ -1,8 +1,14 @@
-﻿using System;
+﻿#define USE_LINKEDCOLLECTION
+// パス文字列を保持する PathItems クラスの内部表現として何を使うか？
+// 特別に作った LinkedCollection か、既存の汎用的な ReadonlyCollection か
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace Tkuri2010.Fsuty
@@ -11,6 +17,7 @@ namespace Tkuri2010.Fsuty
 	{
 		public static readonly ReadOnlyCollection<string> EmptyStringArray = new(new string[0]{ });
 
+		public static readonly LinkedCollection<string> EmptyStringLinkedCollection = new();
 
 		public enum FileSystemSeems
 		{
@@ -70,15 +77,37 @@ namespace Tkuri2010.Fsuty
 		/// <param name="start">マイナス指定も可</param>
 		/// <param name="count">マイナス指定も可</param>
 		/// <returns></returns>
-		public static IReadOnlyList<string> SliceItems(IEnumerable<string> items, int start, int count = int.MaxValue)
+		public static IReadOnlyList<string> SliceItems(IReadOnlyCollection<string> items, int start, int count = int.MaxValue)
 		{
-			var fixedHead =  _FixHeadIndex(items.Count(), start);
-			var fixedTail = _FixTailIndex(items.Count(), fixedHead, count);
+			var fixedHead = _FixHeadIndex(items.Count, start);
+			var fixedTail = _FixTailIndex(items.Count, fixedHead, count);
 			var fixedCount = fixedTail - fixedHead;
 
-			return (0 <= fixedHead) && (fixedHead < items.Count()) && (1 <= fixedCount)
+			return (0 <= fixedHead) && (fixedHead < items.Count) && (1 <= fixedCount)
 					? items.Skip(fixedHead).Take(fixedCount).ToArray()
 					: EmptyStringArray;
+		}
+
+
+		/// <summary>
+		/// 1. マイナスのstartは末尾からの距離と考え、1ステップだけ補正する
+		/// 2. マイナスのcountは、末尾からいくつ削るかの指定とみなす
+		/// 3. 大きなcountは補正する
+		/// 4. 補正後のstartが範囲外の場合はパスを空にする
+		/// </summary>
+		/// <param name="items">アイテム列</param>
+		/// <param name="start">マイナス指定も可</param>
+		/// <param name="count">マイナス指定も可</param>
+		/// <returns></returns>
+		public static LinkedCollection<string> SliceItems(LinkedCollection<string> items, int start, int count = int.MaxValue)
+		{
+			var fixedHead = _FixHeadIndex(items.Count, start);
+			var fixedTail = _FixTailIndex(items.Count, fixedHead, count);
+			var fixedCount = fixedTail - fixedHead;
+
+			return (0 <= fixedHead) && (fixedHead < items.Count) && (1 <= fixedCount)
+					? items.Slice(fixedHead, fixedCount)
+					: EmptyStringLinkedCollection;
 		}
 
 
@@ -127,24 +156,79 @@ namespace Tkuri2010.Fsuty
 
 			return canon;
 		}
-	}
 
+
+		/// <summary>IEnumerable + IEnumerable</summary>
+		public static IEnumerable<string> Concat(IEnumerable<string> a, IEnumerable<string> b)
+		{
+			return a.Concat(b);
+		}
+
+
+		/// <summary>LinkedCollection + IEnumerable</summary>
+		public static LinkedCollection<string> Concat(LinkedCollection<string> a, IEnumerable<string> b)
+		{
+			return a.AppendRange(b);
+		}
+
+
+		public static string JoinString(char separator, IEnumerable<object> values)
+		{
+			return string.Join(separator, values);
+		}
+
+
+		public static string JoinString(char separator, LinkedCollection<object> values)
+		{
+			var builder = new StringBuilder();
+
+			var first = true;
+			var rev = values.GetReverseEnumerator();
+			rev.Reset();
+			while (rev.MoveNext())
+			{
+				if (first) first = false;
+				else
+				{
+					builder.Insert(0, separator);
+				}
+				builder.Insert(0, rev.Current);
+			}
+
+			return builder.ToString();
+		}
+
+	}
 
 	public class PathItems : IReadOnlyList<string>
 	{
 		public static readonly PathItems Empty = new();
 
-		private IReadOnlyList<string> _items =  PathLogics.EmptyStringArray;
+#if USE_LINKEDCOLLECTION
+		private LinkedCollection<string> mItems = PathLogics.EmptyStringLinkedCollection;
+
+		internal PathItems(IEnumerable<string> items)
+		{
+			mItems = new(items);
+		}
+
+		internal PathItems(LinkedCollection<string> items)
+		{
+			mItems = items;
+		}
+
+#else
+		private IReadOnlyList<string> mItems =  PathLogics.EmptyStringArray;
+
+		internal PathItems(IEnumerable<string> items)
+		{
+			mItems = new ReadOnlyCollection<string>(items.ToList());
+		}
+#endif
 
 
 		internal PathItems()
 		{
-		}
-
-
-		internal PathItems(IEnumerable<string> items)
-		{
-			this._items = new ReadOnlyCollection<string>(items.ToList());
 		}
 
 
@@ -155,15 +239,15 @@ namespace Tkuri2010.Fsuty
 		{
 			if (mStringCache == null)
 			{
-				mStringCache = ToString(System.IO.Path.DirectorySeparatorChar.ToString());
+				mStringCache = ToString(System.IO.Path.DirectorySeparatorChar);
 			}
 			return mStringCache;
 		}
 
 
-		virtual public string ToString(string directorySeparator)
+		virtual public string ToString(char directorySeparatorChar)
 		{
-			return string.Join(directorySeparator, _items);
+			return PathLogics.JoinString(directorySeparatorChar, mItems);
 		}
 
 
@@ -174,7 +258,7 @@ namespace Tkuri2010.Fsuty
 				return this;
 			}
 
-			return new PathItems(_items.Concat(items._items));
+			return new PathItems(PathLogics.Concat(mItems, items.mItems));
 		}
 
 
@@ -188,7 +272,7 @@ namespace Tkuri2010.Fsuty
 		/// <param name="count">マイナス指定も可</param>
 		/// <returns></returns>
 		public PathItems SliceItems(int start, int count = int.MaxValue) =>
-				new PathItems(PathLogics.SliceItems(_items, start, count));
+				new PathItems(PathLogics.SliceItems(mItems, start, count));
 
 
 		/// <summary>
@@ -213,23 +297,23 @@ namespace Tkuri2010.Fsuty
 		/// - "..." はそのまま残る
 		/// </summary>
 		/// <returns></returns>
-		public PathItems CanonicalizeItems() => new PathItems(PathLogics.CanonicalizeItems(_items));
+		public PathItems CanonicalizeItems() => new PathItems(PathLogics.CanonicalizeItems(mItems));
 
 
 		/// <summary>(implements IReadOnlyList)</summary>
-		public int Count => _items.Count;
+		public int Count => mItems.Count;
 
 
 		/// <summary>(implements IReadOnlyList)</summary>
-		public string this[int index] => _items[index];
+		public string this[int index] => mItems[index];
 
 
 		/// <summary>(implements IReadOnlyList)</summary>
-		public IEnumerator<string> GetEnumerator() => _items.GetEnumerator();
+		public IEnumerator<string> GetEnumerator() => mItems.GetEnumerator();
 
 
 		/// <summary>(implements IReadOnlyList)</summary>
-		IEnumerator IEnumerable.GetEnumerator() => _items.GetEnumerator();
+		IEnumerator IEnumerable.GetEnumerator() => mItems.GetEnumerator();
 	}
 
 
@@ -302,23 +386,23 @@ namespace Tkuri2010.Fsuty
 			}
 			else if (PathPrefix.Dos.TryParse(aScan, out var traDos))
 			{
-				return traDos!;
+				return traDos;
 			}
 			else if (PathPrefix.DosDeviceUnc.TryParse(aScan, out var pxDosDecUnc))
 			{
-				return pxDosDecUnc!;
+				return pxDosDecUnc;
 			}
 			else if (PathPrefix.DosDeviceDrive.TryParse(aScan, out var pxDosDevDrive))
 			{
-				return pxDosDevDrive!;
+				return pxDosDevDrive;
 			}
 			else if (PathPrefix.DosDevice.TryParse(aScan, out var pxDosDev))
 			{
-				return pxDosDev!;
+				return pxDosDev;
 			}
 			else if (PathPrefix.Unc.TryParse(aScan, out var justUnc))
 			{
-				return justUnc!;
+				return justUnc;
 			}
 			else
 			{
@@ -339,7 +423,7 @@ namespace Tkuri2010.Fsuty
 
 
 		/// <summary>
-		/// Win32向け。UNIX的なパスの場合は空を表す PathPrefixEmpty 固定
+		/// Win32向け。UNIX的なパスの場合は空を表す PathPrefix.None 固定
 		/// </summary>
 		/// <value></value>
 		public IPathPrefix Prefix { get; private set; } = PathPrefix.None.Instance;
@@ -401,17 +485,17 @@ namespace Tkuri2010.Fsuty
 		{
 			if (mStringCache == null)
 			{
-				mStringCache = ToString(System.IO.Path.DirectorySeparatorChar.ToString());
+				mStringCache = ToString(System.IO.Path.DirectorySeparatorChar);
 			}
 			return mStringCache;
 		}
 
 
-		public string ToString(string directorySeparator)
+		public string ToString(char directorySeparatorChar)
 		{
 			return Prefix.ToString()
-					+ (IsAbsolute ? directorySeparator : "")
-					+ Items.ToString(directorySeparator);
+					+ (IsAbsolute ? directorySeparatorChar : "")
+					+ Items.ToString(directorySeparatorChar);
 		}
 
 
@@ -608,11 +692,11 @@ namespace Tkuri2010.Fsuty.PathPrefix
 		public static readonly Regex VolumePattern = new Regex(@"^/+([^/]+)");
 
 
-		public static bool TryParse(FilepathScanner aScan, out DosDevice? oResult)
+		public static bool TryParse(FilepathScanner aScan, [NotNullWhen(true)] out DosDevice? oResult)
 		{
 			oResult = null;
 
-			if (!aScan.Skip(PrefixPattern, out var match))
+			if (! aScan.Skip(PrefixPattern, out var match))
 			{
 				return false;
 			}
@@ -665,7 +749,7 @@ namespace Tkuri2010.Fsuty.PathPrefix
 				.Replace(" ", ""));
 
 
-		public static bool TryParse(FilepathScanner aScan, out DosDeviceDrive? oResult)
+		public static bool TryParse(FilepathScanner aScan, [NotNullWhen(true)] out DosDeviceDrive? oResult)
 		{
 			oResult = null;
 
@@ -737,7 +821,7 @@ namespace Tkuri2010.Fsuty.PathPrefix
 				);
 
 
-		public static bool TryParse(FilepathScanner aScan, out DosDeviceUnc? oResult)
+		public static bool TryParse(FilepathScanner aScan, [NotNullWhen(true)] out DosDeviceUnc? oResult)
 		{
 			oResult = null;
 
@@ -797,7 +881,7 @@ namespace Tkuri2010.Fsuty.PathPrefix
 		public static readonly Regex PrefixPattern = new Regex(@"^//([^/]+)/+([^/]+)");
 
 
-		public static bool TryParse(FilepathScanner aScan, out Unc? oResult)
+		public static bool TryParse(FilepathScanner aScan, [NotNullWhen(true)] out Unc? oResult)
 		{
 			oResult = null;
 
@@ -845,7 +929,7 @@ namespace Tkuri2010.Fsuty.PathPrefix
 		public static readonly Regex PrefixPattern = new Regex(@"^([a-zA-Z])" + Filepath.MsdosVolumeSeparatorChar);
 
 
-		public static bool TryParse(FilepathScanner aScan, out Dos? oResult)
+		public static bool TryParse(FilepathScanner aScan, [NotNullWhen(true)] out Dos? oResult)
 		{
 			oResult = null;
 

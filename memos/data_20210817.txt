@@ -1,0 +1,26 @@
+
+2021/8/17 計測: およそ 8.5万のエントリ
+
+◆LinkedCollection では「曾祖父」世代のペイロードへの参照を持つ
+  PathItems では LinkedCollection を使う
+  パス文字列化の際には、逆順で文字列を組み立てる
+=============================================================
+    GetTotalAllocatedBytes       : 143220504
+GetAllocatedBytesForCurrentThread: 141175264
+            Elapsed              : 00:00:01.7878820
+
+
+◆LinkedCollection では「曾祖父」世代のペイロードへの参照を持つ機能を無効にした
+  PathItems では LinkedCollection を使う
+  パス文字列化の際には、逆順で文字列を組み立てる
+=============================================================
+    GetTotalAllocatedBytes       : 141674368
+GetAllocatedBytesForCurrentThread: 139632104
+            Elapsed              : 00:00:01.7537883
+
+
+◆PathItems ではフレームワークの ReadonliCollection を使う
+=============================================================
+    GetTotalAllocatedBytes       : 159265280
+GetAllocatedBytesForCurrentThread: 157221824
+            Elapsed              : 00:00:01.7439838

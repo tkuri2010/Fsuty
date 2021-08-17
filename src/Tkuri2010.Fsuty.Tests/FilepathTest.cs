@@ -20,8 +20,8 @@ namespace Tkuri2010.Fsuty.Tests
 		{
 			var path = Filepath.Parse("/");
 			Assert.IsTrue(path.IsAbsolute);
-			Assert.AreEqual("/", path.ToString("/"));
-			Assert.AreEqual("\\", path.ToString("\\"));
+			Assert.AreEqual("/", path.ToString('/'));
+			Assert.AreEqual("\\", path.ToString('\\'));
 		}
 
 
@@ -30,7 +30,7 @@ namespace Tkuri2010.Fsuty.Tests
 		{
 			var path = Filepath.Parse("file.txt");
 			Assert.IsFalse(path.IsAbsolute);
-			Assert.AreEqual("file.txt", path.ToString("/"));
+			Assert.AreEqual("file.txt", path.ToString('/'));
 		}
 
 
@@ -44,7 +44,7 @@ namespace Tkuri2010.Fsuty.Tests
 			Assert.AreEqual("a", path.Items[0]);
 			Assert.AreEqual("b", path.Items[1]);
 			Assert.AreEqual("c.tar.gz", path.Items[2]);
-			Assert.AreEqual("a/b/c.tar.gz", path.ToString("/"));
+			Assert.AreEqual("a/b/c.tar.gz", path.ToString('/'));
 		}
 
 
@@ -55,7 +55,7 @@ namespace Tkuri2010.Fsuty.Tests
 			Assert.IsTrue(path.Prefix is PathPrefix.None);
 			Assert.IsTrue(path.IsAbsolute);
 			Assert.AreEqual(0, path.Items.Count);
-			Assert.AreEqual("/", path.ToString("/"));
+			Assert.AreEqual("/", path.ToString('/'));
 		}
 
 
@@ -68,7 +68,7 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.IsTrue(path.Prefix is PathPrefix.None);
 				Assert.IsTrue(path.IsAbsolute);
 				Assert.AreEqual(3, path.Items.Count);
-				Assert.AreEqual("/usr/local/bin", path.ToString("/"));
+				Assert.AreEqual("/usr/local/bin", path.ToString('/'));
 			};
 
 			test_("/usr/local/bin");
@@ -278,7 +278,7 @@ namespace Tkuri2010.Fsuty.Tests
 
 			Assert.IsInstanceOfType(rv.Prefix, typeof(PathPrefix.None));
 			Assert.AreEqual(0, rv.Items.Count);
-			Assert.AreEqual("", rv.ToString("/"));
+			Assert.AreEqual("", rv.ToString('/'));
 		}
 
 
@@ -335,82 +335,82 @@ namespace Tkuri2010.Fsuty.Tests
 			{
 				var path = basepath.Slice(0);
 				Assert.IsTrue(path.IsAbsolute);
-				Assert.AreEqual("/home/kuma/foo/bar/baz.txt", path.ToString("/"));
+				Assert.AreEqual("/home/kuma/foo/bar/baz.txt", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(1);
 				Assert.IsFalse(path.IsAbsolute);
-				Assert.AreEqual("kuma/foo/bar/baz.txt", path.ToString("/"));
+				Assert.AreEqual("kuma/foo/bar/baz.txt", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(-1);
 				Assert.IsFalse(path.IsAbsolute);
 				Assert.AreEqual(1, path.Items.Count);
-				Assert.AreEqual("baz.txt", path.ToString("/"));
+				Assert.AreEqual("baz.txt", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(-2);
 				Assert.IsFalse(path.IsAbsolute);
 				Assert.AreEqual(2, path.Items.Count);
-				Assert.AreEqual("bar/baz.txt", path.ToString("/"));
+				Assert.AreEqual("bar/baz.txt", path.ToString('/'));
 			}
 
 			// 2引数
 			{
 				var path = basepath.Slice(0, 0);
 				Assert.IsTrue(path.IsAbsolute);
-				Assert.AreEqual("/", path.ToString("/"));
+				Assert.AreEqual("/", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(0, 1);
 				Assert.IsTrue(path.IsAbsolute);
-				Assert.AreEqual("/home", path.ToString("/"));
+				Assert.AreEqual("/home", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(0, 2);
 				Assert.IsTrue(path.IsAbsolute);
-				Assert.AreEqual("/home/kuma", path.ToString("/"));
+				Assert.AreEqual("/home/kuma", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(1, 2);
 				Assert.IsFalse(path.IsAbsolute);
-				Assert.AreEqual("kuma/foo", path.ToString("/"));
+				Assert.AreEqual("kuma/foo", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(2, 2);
 				Assert.IsFalse(path.IsAbsolute);
-				Assert.AreEqual("foo/bar", path.ToString("/"));
+				Assert.AreEqual("foo/bar", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(0, -1);
 				Assert.IsTrue(path.IsAbsolute);
-				Assert.AreEqual("/home/kuma/foo/bar", path.ToString("/"));
+				Assert.AreEqual("/home/kuma/foo/bar", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(0, -2);
 				Assert.IsTrue(path.IsAbsolute);
-				Assert.AreEqual("/home/kuma/foo", path.ToString("/"));
+				Assert.AreEqual("/home/kuma/foo", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(1, -2);
 				Assert.IsFalse(path.IsAbsolute);
-				Assert.AreEqual("kuma/foo", path.ToString("/"));
+				Assert.AreEqual("kuma/foo", path.ToString('/'));
 			}
 
 			{
 				var path = basepath.Slice(2, -2);
 				Assert.IsFalse(path.IsAbsolute);
-				Assert.AreEqual("foo", path.ToString("/"));
+				Assert.AreEqual("foo", path.ToString('/'));
 			}
 		}
 
@@ -420,7 +420,7 @@ namespace Tkuri2010.Fsuty.Tests
 		{
 			{
 				var path = Filepath.Parse("./../dir/.../xxx/../file.txt");
-				Assert.AreEqual("dir/.../file.txt", path.Canonicalize().ToString("/"));
+				Assert.AreEqual("dir/.../file.txt", path.Canonicalize().ToString('/'));
 			}
 		}
 	}
