@@ -374,6 +374,18 @@ namespace Tkuri2010.Fsuty.Tests
 			Assert.AreEqual("server", prefix!.Server);
 			Assert.AreEqual("share-name", prefix!.Share);
 		}
+
+
+		[TestMethod]
+		public void Test_PrefixTraditionalDos()
+		{
+			var src = @"c:\";
+			var scan = new FilepathScanner(src);
+
+			Assert.IsTrue(Dos.TryParse(scan, out var prefix));
+			Assert.AreEqual("c:", prefix!.Drive);
+			Assert.AreEqual("c", prefix!.DriveLetter);
+		}
 	}
 }
 

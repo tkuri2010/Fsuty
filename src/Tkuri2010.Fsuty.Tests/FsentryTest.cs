@@ -70,7 +70,7 @@ namespace Tkuri2010.Fsuty.Tests
 			{
 				Assert.IsFalse(entry.RelativePath.IsAbsolute);
 
-				var relPathStr = entry.RelativePath.ToString("/");
+				var relPathStr = entry.RelativePath.ToString('/');
 
 				if (entry.Event == FsentryEvent.EnterDir)
 				{
@@ -118,7 +118,7 @@ namespace Tkuri2010.Fsuty.Tests
 			{
 				Assert.IsFalse(entry.RelativePath.IsAbsolute);
 
-				var relPathStr = entry.RelativePath.ToString("/");
+				var relPathStr = entry.RelativePath.ToString('/');
 
 				if (entry.Event == FsentryEvent.EnterDir)
 				{

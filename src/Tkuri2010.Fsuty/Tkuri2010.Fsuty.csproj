@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Version>1.0.0-beta.20210220</Version>
+    <Version>1.0.0-beta.20210817</Version>
 	<Title>Local file system utilities</Title>
 	<Authors>tkuri2010</Authors>
 	<Description>Local file system utilities</Description>
-	<Copyright>tkuri2010 2020</Copyright>
+	<Copyright>tkuri2010 2020-2021</Copyright>
 	<PackageProjectUrl>https://github.com/tkuri2010/Fsuty</PackageProjectUrl>
 	<PackageLicenseExpression>MIT</PackageLicenseExpression>
 

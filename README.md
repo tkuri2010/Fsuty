@@ -7,6 +7,8 @@ Local Files and Directories Utility (Path descriptor, Directory tree walker, etc
 	- File path parser / descriptor
 - `Fsentry` (namespace `Tkuri2010.Fsuty`)
 	- Files and directories enumeration utility.
+- (side-product) `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
+	- Unique formed collection class.
 
 ## How to use in your project.
 
@@ -110,38 +112,28 @@ We have only `Combine(PathItems)` method.
 Why?
 
 Consider this:
+
 ```cs
-	string getRelativePath_withBug()
+	var abs = Filepath.Parse("/opt/some-tmp");
+
+	var xxx = abs.Combine("/root");  //=> ... ???
+```
+Where does the `xxx` object point do you expect? `"/opt/some-tmp/root"`? or `"/root"`? I don't want to be confused by this design.
+
+I have no plans to provide `Combine(Filepath)` nor `Combine(string)` methods. We should remember that the `Combine(PathItems)` method takes a __RELATIVE path-items-object only__.
+
+But you can:
+```cs
+	PathItems heh(string path)
 	{
-		return RandomBool()
-			? "correct/relative/dir"
-			: @"D:\unregainable-our-treasures"; // accidentally returning absolute path...
+		return Filepath.Parse(path).Items;
 	}
 
-	var expectsRelative = getRelativePath_withBug();
+	var abs = Filepath.Parse("/opt/some-tmp");
 
-	var absPath = Filepath.Parse(@"c:\playground\we-can-use-here-freely");
-
-	var thePath = absPath.Combine(expectsRelative);
-		//=> ...???
-
-	DeleteAllItems(thePath); // What should we expect?
+	var xxx = abs.Combine(heh("/root"));
 ```
-
-Refer to the `System.IO.Path.Combine()`:
-```cs
-	var expectsRelative = getRelativePath_withBug(); // OMG...
-
-	var absPath = @"C:\playground\we-can-use-here-freely";
-
-	var thePath = Path.Combine(absPath, expectsRelative);
-		//=> `thePath` is now "D:\unregainable-our-treasures"
-
-	DeleteAllItems(thePath); // buh bye our treasures!
-```
-Did you expect this behavior? I don't like this.
-
-I don't provide `Combine(Filepath)` nor `Combine(string)` methods so that we can remember that the `Combine(PathItems)` method takes a (relative) path-items-object ONLY.
+at your own risk.
 
 
 ## class `Fsentry` (namespace `Tkuri2010.Fsuty`)
@@ -190,3 +182,39 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 		/* ... and more works ... */
 	}
 ```
+
+
+## (side-product) class `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
+
+When we enumerates file-system-entries, we may hold path strings like:
+```
+ "var" "log" "httpd"                       <-- one entry
+ "var" "log" "httpd" "server1"             <-- another entry
+ "var" "log" "httpd" "server1" "access"    <-- and more...
+ "var" "log" "httpd" "server1" "access.1"
+ "var" "log" "httpd" "server1" "access.2"
+ "var" "log" "httpd" "server2"
+ "var" "log" "httpd" "server2" "access"
+ "var" "log" "php-fpm"
+ "var" "log" "php-fpm" "error_log"
+ "var" "log" "php-fpm" "error_log.1"
+ ...
+```
+
+But, actualy, what we need are only these strings and links:
+```
+ "var"
+   `-  "log"
+         +-  "httpd"
+         |     +-  "server1"
+         |     |    +-  "access"
+         |     |    +-  "access.1"
+         |     |    `-  "access.2"
+         |     `-  "server2"
+         |           `-  "access"
+         +-  "php-fpm"
+         |     +-  "error_log"
+         |     +-  "error_log.1"
+```
+`LinkedCollection<E>` is designed to hold this structures efficiently.
+

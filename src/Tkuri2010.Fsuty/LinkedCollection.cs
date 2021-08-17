@@ -3,6 +3,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Tkuri2010.Fsuty
 {
@@ -165,21 +166,66 @@ namespace Tkuri2010.Fsuty
 		public LinkedCollection<E> TakeItems(int n) => Slice(0, n);
 
 
-		#region enumeration
-
-		class EmptyEnumerator : IEnumerator<E>
+		public IEnumerator<E> GetReverseEnumerator()
 		{
-			public E Current => throw new InvalidOperationException("empty collection");
-
-			object IEnumerator.Current => throw new InvalidOperationException("empty collection");
-
-			public void Dispose() { }
-
-			public bool MoveNext() => false;
-
-			public void Reset() { }
+			return (Count == 0 || mPayload is null)
+					? Enumerable.Empty<E>().GetEnumerator()
+					: new ReverseEnumerator(mPayload, Count);
 		}
 
+		class ReverseEnumerator : IEnumerator<E>
+		{
+			Payload mOriginPayload;
+
+			Payload mCurrentPayload;
+
+			int mCount;
+
+			int mPointer;
+
+			internal ReverseEnumerator(Payload payload, int count)
+			{
+				mOriginPayload = mCurrentPayload = payload;
+				mCount = count;
+			}
+
+			public E Current => mCurrentPayload.Value;
+
+			object? IEnumerator.Current => mCurrentPayload.Value;
+			// 戻り値の型にnull可能指定を付加した。
+			// https://github.com/dotnet/roslyn/issues/31867
+
+			public void Dispose()
+			{
+			}
+
+			public bool MoveNext()
+			{
+				if (mCount <= mPointer)
+				{
+					return false;
+				}
+
+				if (1 <= mPointer && mCurrentPayload.Parent is not null)
+				{
+					mCurrentPayload = mCurrentPayload.Parent;
+				}
+				// What if current.Parent is null ?
+
+				mPointer++;
+
+				return true;
+			}
+
+			public void Reset()
+			{
+				mCurrentPayload = mOriginPayload;
+				mPointer = 0;
+			}
+		}
+
+
+		#region enumeration
 
 		class Enumerator : IEnumerator<E>
 		{
@@ -234,13 +280,17 @@ namespace Tkuri2010.Fsuty
 
 		public IEnumerator<E> GetEnumerator()
 		{
-			return (mPayload is null) ? new EmptyEnumerator() : new Enumerator(mPayload, Count);
+			return (mPayload is null)
+					? Enumerable.Empty<E>().GetEnumerator()
+					: new Enumerator(mPayload, Count);
 		}
 
 
 		IEnumerator IEnumerable.GetEnumerator()
 		{
-			return (mPayload is null) ? new EmptyEnumerator() : new Enumerator(mPayload, Count);
+			return (mPayload is null)
+					? Enumerable.Empty<E>().GetEnumerator()
+					: new Enumerator(mPayload, Count);
 		}
 
 		#endregion

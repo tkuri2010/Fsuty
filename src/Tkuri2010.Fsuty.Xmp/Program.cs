@@ -77,11 +77,27 @@ namespace Tkuri2010.Fsuty.Xmp
 
 		static async Task Xmp3()
 		{
+			var sw = new System.Diagnostics.Stopwatch();
+			var all = new List<Filepath>();
 			var ct = CancellationToken.None;
-			await foreach (var e in Fsentry.VisitAsync("r:/temp/vk_xmp3", ct))
+
+			sw.Start();
+
+			await foreach (var e in Fsentry.VisitAsync(@"D:\somewhere", ct))
 			{
-				Console.WriteLine(e.FullPathString);
+				if (e.Event == FsentryEvent.EnterDir || e.Event == FsentryEvent.File)
+				{
+					Console.WriteLine(e.RelativePath);
+					all.Add(e.RelativePath);
+				}
 			}
+
+			sw.Stop();
+
+			Console.WriteLine("=============================================================");
+			Console.WriteLine("    GetTotalAllocatedBytes       : " + System.GC.GetTotalAllocatedBytes());
+			Console.WriteLine("GetAllocatedBytesForCurrentThread: " + System.GC.GetAllocatedBytesForCurrentThread());
+			Console.WriteLine("            Elapsed              : " + sw.Elapsed);
 		}
 
 #if false
