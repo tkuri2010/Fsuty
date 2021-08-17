@@ -136,6 +136,9 @@ namespace Tkuri2010.Fsuty.Tests
 		}
 
 
+		/// <summary>
+		/// LinkedCollection は immutable なので、Append などの操作で元オブジェクトが変化しない事を確認
+		/// </summary>
 		[TestMethod]
 		public void Test_Append_1()
 		{
@@ -167,6 +170,42 @@ namespace Tkuri2010.Fsuty.Tests
 			testo1();
 			testo1_2();
 			testo2();
+		}
+
+
+		[TestMethod]
+		public void Test_ReverseEnumerator_Empty()
+		{
+			var o = new LinkedCollection<string>();
+
+			var count = 0;
+			var rev = o.GetReverseEnumerator();
+			rev.Reset();
+			while (rev.MoveNext())
+			{
+				_ = rev.Current;
+				count++;
+			}
+
+			Assert.AreEqual(0, count);
+		}
+
+
+		[TestMethod]
+		public void Test_ReverseEnumerator_1()
+		{
+			var o = new LinkedCollection<string>(new[]{"5", "4", "3", "2", "1", "0"});
+
+			var count = 0;
+			var rev = o.GetReverseEnumerator();
+			rev.Reset();
+			while (rev.MoveNext())
+			{
+				Assert.AreEqual($"{count}", rev.Current);
+				count++;
+			}
+
+			Assert.AreEqual(6, count);
 		}
 	}
 }
