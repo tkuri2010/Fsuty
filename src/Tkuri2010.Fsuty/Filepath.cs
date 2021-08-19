@@ -13,58 +13,715 @@ using System.Text.RegularExpressions;
 
 namespace Tkuri2010.Fsuty
 {
-	public static class PathLogics
+	/// <summary>file path parser</summary>
+	public interface IFilepathParser
+	{
+		Filepath Parse(string? path);
+	}
+
+
+	/// <summary>Win32 path prefix descriptor</summary>
+	public interface IPathPrefix
+	{
+	}
+
+
+	/// <summary>Relative path items (array of string)</summary>
+	public class PathItems : IReadOnlyList<string>
+	{
+		public static readonly PathItems Empty = new();
+
+#if USE_LINKEDCOLLECTION
+		private LinkedCollection<string> mItems = Internal.Logics.EmptyStringLinkedCollection;
+
+		internal PathItems(IEnumerable<string> items)
+		{
+			mItems = new(items);
+		}
+
+		internal PathItems(LinkedCollection<string> items)
+		{
+			mItems = items;
+		}
+
+#else
+		private IReadOnlyList<string> mItems =  Internal.Logic.EmptyStringArray;
+
+		internal PathItems(IEnumerable<string> items)
+		{
+			mItems = new ReadOnlyCollection<string>(items.ToList());
+		}
+#endif
+
+
+		internal PathItems()
+		{
+		}
+
+
+		private string? mStringCache = null;
+
+
+		override public string ToString()
+		{
+			if (mStringCache == null)
+			{
+				mStringCache = ToString(System.IO.Path.DirectorySeparatorChar);
+			}
+			return mStringCache;
+		}
+
+
+		virtual public string ToString(char directorySeparatorChar)
+		{
+			return Internal.Logics.JoinString(directorySeparatorChar, mItems);
+		}
+
+
+		public PathItems CombineItems(PathItems items)
+		{
+			if (items.Count == 0)
+			{
+				return this;
+			}
+
+			return new PathItems(Internal.Logics.Concat(mItems, items.mItems));
+		}
+
+
+		/// <summary>
+		/// 1. マイナスのstartは末尾からの距離と考え、1ステップだけ補正する
+		/// 2. マイナスのcountは、末尾からいくつ削るかの指定とみなす
+		/// 3. 大きなcountは補正する
+		/// 4. 補正後のstartが範囲外の場合はパスを空にする
+		/// </summary>
+		/// <param name="start">マイナス指定も可</param>
+		/// <param name="count">マイナス指定も可</param>
+		/// <returns></returns>
+		public PathItems SliceItems(int start, int count = int.MaxValue) =>
+				new PathItems(Internal.Logics.SliceItems(mItems, start, count));
+
+
+		/// <summary>
+		/// 指定した数だけディレクトリをさかのぼる。Slice(0, -level) と同じ。
+		/// </summary>
+		/// <param name="level">省略時1。何段階ディレクトリをさかのぼるかを指定</param>
+		/// <returns></returns>
+		public PathItems AscendItems(int level = 1) => SliceItems(0, -level);
+
+
+		/// <summary>
+		/// ディレクトリを1段階さかのぼる。Ascemd() と同じ。また、Slice(0, -1) とも同じ。
+		/// </summary>
+		/// <returns></returns>
+		public PathItems ParentItems => AscendItems();
+
+
+		/// <summary>
+		/// "." は削除し、".." は解決する。
+		/// 少なくとも以下の点について、Win32 PathCanonicalize() 互換。
+		/// - 先頭の ".." は削除
+		/// - "..." はそのまま残る
+		/// </summary>
+		/// <returns></returns>
+		public PathItems CanonicalizeItems() => new PathItems(Internal.Logics.CanonicalizeItems(mItems));
+
+
+		/// <summary>(implements IReadOnlyList)</summary>
+		public int Count => mItems.Count;
+
+
+		/// <summary>(implements IReadOnlyList)</summary>
+		public string this[int index] => mItems[index];
+
+
+		/// <summary>(implements IReadOnlyList)</summary>
+		public IEnumerator<string> GetEnumerator() => mItems.GetEnumerator();
+
+
+		/// <summary>(implements IReadOnlyList)</summary>
+		IEnumerator IEnumerable.GetEnumerator() => mItems.GetEnumerator();
+	}
+
+
+	/// <summary>File path descriptor</summary>
+    public class Filepath
+    {
+		private static IFilepathParser? mCurrentFilepathParser = null;
+
+
+		/// <summary>
+		/// Get or set IFilepathParser. Default = prepared instance that matches from the system (unix or win32)
+		/// </summary>
+		/// <value></value>
+		public static IFilepathParser CurrentFilepathParser
+		{
+			get
+			{
+				if (mCurrentFilepathParser is null)
+				{
+					mCurrentFilepathParser = Internal.FilepathParsingHelper.GetSystemDefaultFilepathParser();
+				}
+				return mCurrentFilepathParser;
+			}
+
+			set
+			{
+				mCurrentFilepathParser = value;
+			}
+		}
+
+
+		/// <summary>
+		/// empty Filepath object
+		/// </summary>
+		/// <returns></returns>
+		public static readonly Filepath Empty = new Filepath();
+
+
+		/// <summary>
+		/// <example>
+		/// Traditional DOS path
+		/// <code>
+		/// var normal_abs  = Parse(@"C:\dir\file.txt");
+		/// var normal_rel  = Parse(@"relative\dir\and\file.txt");
+		/// var simple_abs  = Parse(@"\");
+		/// var simple_abs2 = Parse(@"C:\");
+		/// var drive_rel   = Parse(@"C:");  // specifies a drive, but relative
+		/// var drive_rel_2 = Parse(@"D:drive-and-relative\dir\file");
+		/// </code>
+		///
+		/// DOS Device path
+		/// <code>Parse(@"\\?\volume/dir/more-dir/.git");</code>
+		///
+		/// UNC path
+		/// <code>Parse(@"\\server\share-name\dir\file");</code>
+		///
+		/// UNIX
+		/// <code>
+		///   Parse("/usr/local/bin");
+		///   Parse("/");  // root
+		/// </code>
+		/// </example>
+		/// </summary>
+		/// <param name="path">path string</param>
+		/// <returns></returns>
+		public static Filepath Parse(string? path) => CurrentFilepathParser.Parse(path);
+
+
+		/// <summary>
+		/// Win32向け。UNIX的なパスの場合は空を表す PathPrefix.None 固定
+		/// </summary>
+		/// <value></value>
+		public IPathPrefix Prefix { get; internal set; } = PathPrefix.None.Instance;
+
+
+		public bool IsAbsolute { get; internal set; } = false;
+
+
+		public PathItems Items { get; internal set; } = PathItems.Empty;
+
+
+		/// <summary>
+		/// Itemsの最後の部分。存在しない場合はstring.Emptyを返す
+		/// </summary>
+		public string LastItem => Items.LastOrDefault() ?? string.Empty;
+
+
+		/// <summary>
+		/// 範囲未チェックのため使用注意
+		/// </summary>
+		private string _LastItem => Items[Items.Count - 1];
+
+
+		public bool HasExtension
+				=> Items.Count <= 0
+					? false
+					: System.IO.Path.HasExtension(_LastItem);
+
+		/// <summary>
+		/// System.IO.Path.GetExtension()に準じる。拡張子が無い場合はstring.Emptyを返す
+		/// </summary>
+		public string Extension
+				=> Items.Count <= 0
+					? string.Empty
+					: System.IO.Path.GetExtension(_LastItem);
+
+
+		/// <summary>
+		/// Itemsの最後の部分。存在しない場合はstring.Emptyを返す。
+		///
+		/// System.IO.Path.GetFileNameWithoutExtension() に依存する。
+		/// 不正な文字が含まれている場合、System.ArgumentException が発生する
+		/// </summary>
+		public string LastItemWithoutExtension
+				=> Items.Count == 0
+					? string.Empty
+					: System.IO.Path.GetFileNameWithoutExtension(_LastItem);
+
+
+		internal Filepath()
+		{
+		}
+
+
+		private string? mStringCache = null;
+
+
+		override public string ToString()
+		{
+			if (mStringCache == null)
+			{
+				mStringCache = ToString(System.IO.Path.DirectorySeparatorChar);
+			}
+			return mStringCache;
+		}
+
+
+		public string ToString(char directorySeparatorChar)
+		{
+			return Prefix.ToString()
+					+ (IsAbsolute ? directorySeparatorChar : "")
+					+ Items.ToString(directorySeparatorChar);
+		}
+
+
+		public Filepath Combine(PathItems items)
+		{
+			if (items.Count == 0)
+			{
+				return this;
+			}
+
+			return new Filepath
+			{
+				Prefix = this.Prefix,
+				IsAbsolute = this.IsAbsolute,
+				Items = this.Items.CombineItems(items),
+			};
+		}
+
+
+		/// <summary>
+		///  var fp = Filepath.Parse(@"C:\d1\d2\d3\file.txt");
+		///  var sub = fp.Slice(1, 2); //=> Prefix="C:",  Items= [ d2, d3 ]
+		///  sub.ToString();  //=> "C:d2/d3"  (a prefix and RELATIVE paths)
+		///
+		/// 1. マイナスのstartは末尾からの距離と考え、1ステップだけ補正する
+		/// 2. マイナスのcountは、末尾からいくつ削るかの指定とみなす
+		/// 3. 大きなcountは補正する
+		/// 4. 補正後のstartが範囲外の場合はパスを空にする
+		/// </summary>
+		/// <param name="start">マイナス指定も可</param>
+		/// <param name="count">マイナス指定も可</param>
+		/// <returns></returns>
+		public Filepath Slice(int start, int count = int.MaxValue)
+		{
+			var fixedHead =  Internal.Logics._FixHeadIndex(Items.Count, start);
+
+			return new Filepath
+			{
+				Prefix = this.Prefix,
+
+				// 開始位置が 0 であれば、this.IsAbsolute を踏襲。そうでなければ常に相対パスとなる
+				IsAbsolute = (fixedHead == 0) ? this.IsAbsolute : false,
+
+				Items = Items.SliceItems(start, count),
+			};
+		}
+
+
+		/// <summary>
+		/// 指定した数だけディレクトリをさかのぼる。Slice(0, -aLevel) と同じ。
+		/// </summary>
+		/// <param name="level">省略時1。何段階ディレクトリをさかのぼるかを指定</param>
+		/// <returns></returns>
+		public Filepath Ascend(int level = 1) => Slice(0, -level);
+
+
+		/// <summary>
+		/// ディレクトリを1段階さかのぼる。Ascemd() と同じ。また、Slice(0, -1) とも同じ。
+		/// </summary>
+		/// <returns></returns>
+		public Filepath Parent => Ascend();
+
+
+		/// <summary>
+		/// "." は削除し、".." は解決する。
+		/// 少なくとも以下の点について、Win32 PathCanonicalize() 互換。
+		/// - 先頭の ".." は削除
+		/// - "..." はそのまま残る
+		/// </summary>
+		/// <returns></returns>
+		public Filepath Canonicalize()
+		{
+			return new Filepath
+			{
+				Prefix = Prefix,
+				IsAbsolute = IsAbsolute,
+				Items = Items.CanonicalizeItems(),
+			};
+		}
+    }
+}
+
+
+namespace Tkuri2010.Fsuty.PathPrefix
+{
+	public class None : IPathPrefix
+	{
+		public static readonly None Instance = new None();
+
+		override public string ToString()
+		{
+			return string.Empty;
+		}
+	}
+
+
+	public interface IDosDevice : IPathPrefix
+	{
+		string SignChar { get; }
+
+		string Volume { get; }
+	}
+
+
+	public interface IHasDrive : IPathPrefix
+	{
+		/// <summary>
+		/// ドライブ名。"C:" などコロン付き
+		/// </summary>
+		/// <value></value>
+		string Drive { get; }
+
+		/// <summary>
+		/// ドライブ文字
+		/// </summary>
+		/// <value></value>
+		string DriveLetter { get; }
+	}
+
+
+	public interface IShared
+	{
+		/// <summary>
+		/// サーバ
+		/// </summary>
+		/// <value></value>
+		string Server { get; }
+
+		/// <summary>
+		/// 共有名
+		/// </summary>
+		/// <value></value>
+		string Share { get; }
+	}
+
+
+	/// <summary>
+	/// - "\\.\VOLUME{ASDFASDF}\foo\bar.txt"
+	/// </summary>
+	public class DosDevice : IDosDevice
+	{
+		/// <summary>
+		/// matches "//./", "//?/"
+		/// </summary>
+		public static readonly Regex PrefixPattern = new Regex(@"^//(\.|\?)(?=/)");
+
+
+		/// <summary>
+		/// matches "/volume-string", "/C:"   ~~"/C$"~~ ←これは勘違い
+		/// </summary>
+		public static readonly Regex VolumePattern = new Regex(@"^/+([^/]+)");
+
+
+		public static bool TryParse(Internal.FilepathScanner aScan, [NotNullWhen(true)] out DosDevice? oResult)
+		{
+			oResult = null;
+
+			if (! aScan.Skip(PrefixPattern, out var match))
+			{
+				return false;
+			}
+
+			oResult = new DosDevice();
+			oResult.SignChar = match.Groups[1].Value;
+
+			if (aScan.Skip(VolumePattern, out var volumePart))
+			{
+				// \\.\some-volume\...
+				oResult.Volume = volumePart.Groups[1].Value;
+			}
+
+			return true;
+		}
+
+
+		/// <summary>
+		/// 「.」または「?」
+		/// </summary>
+		/// <value></value>
+		public string SignChar { get; private set; } = string.Empty;
+
+
+		/// <summary>
+		/// ボリューム文字列。"VOLUME{ASDFASDF}"など
+		/// </summary>
+		/// <value></value>
+		public string Volume { get; private set; } = string.Empty;
+
+
+		override public string ToString()
+			=> $@"\\{SignChar}\{Volume}";
+	}
+
+
+	/// <summary>
+	/// - "\\?\C:\foo\bar.txt"
+	/// - "//?/C:/foo/bar.txt" (forward slash allowed)
+	/// - ~~"\\?\C$\foo\bar.txt"~~  これは違う。何か勘違いしていた？
+	/// </summary>
+	public class DosDeviceDrive : IDosDevice, IHasDrive
+	{
+		/// <summary>
+		/// matches "//./C:", "//?/R:"
+		/// </summary>
+		public static readonly Regex PrefixPattern = new Regex(
+			 	(@"^//(\.|\?)"
+					+ @"/(([a-zA-Z])" + Internal.FilepathParsingHelper.MsdosVolumeSeparatorChar + ")")
+				.Replace(" ", ""));
+
+
+		public static bool TryParse(Internal.FilepathScanner aScan, [NotNullWhen(true)] out DosDeviceDrive? oResult)
+		{
+			oResult = null;
+
+			if (! aScan.Skip(PrefixPattern, out var match))
+			{
+				return false;
+			}
+
+			oResult = new DosDeviceDrive
+			{
+				SignChar = match.Groups[1].Value,
+				Drive = match.Groups[2].Value,
+				DriveLetter = match.Groups[3].Value,
+			};
+
+			return true;
+		}
+
+
+		/// <summary>
+		/// 「.」または「?」
+		/// </summary>
+		/// <value></value>
+		public string SignChar { get; private set; } = string.Empty;
+
+
+		/// <summary>
+		/// drive ("C:" , "Z:", and so on....)
+		/// </summary>
+		/// <value></value>
+		public string Drive { get; private set; } = string.Empty;
+
+
+		/// <summary>
+		/// drive letter
+		/// </summary>
+		/// <value></value>
+		public string DriveLetter { get; private set; } = string.Empty;
+
+
+		/// <summary>
+		/// ドライブ指定のパスにおける「ボリューム」とは、"C:" など
+		/// </summary>
+		/// <value></value>
+		public string Volume => Drive;
+
+
+		/// <summary>
+		/// "\\.\" + drive (or volume) + volume separator
+		/// </summary>
+		/// <returns></returns>
+		override public string ToString() => $@"\\{SignChar}\{Volume}";
+	}
+
+
+	/// <summary>
+	/// - "\\?\UNC\server\share-name\foo\bar.txt"
+	/// - "\\?\UNC\127.0.0.1\share-name\foo\bar.txt"
+	/// </summary>
+	public class DosDeviceUnc : IDosDevice, IShared
+	{
+		/// <summary>
+		/// matches "//./UNC", "//./UNC/server", "//?/UNC/server/share-name"
+		/// </summary>
+		public static readonly Regex UncPattern = new Regex(
+				@"^//(\.|\?)/UNC (/+ (W+) (/+ (W+) )? )?"
+				.Replace("W", "[^/]")
+				.Replace(" ", "")
+				);
+
+
+		public static bool TryParse(Internal.FilepathScanner aScan, [NotNullWhen(true)] out DosDeviceUnc? oResult)
+		{
+			oResult = null;
+
+			if (! aScan.Skip(UncPattern, out var asUnc))
+			{
+				return false;
+			}
+
+			oResult = new DosDeviceUnc
+			{
+				SignChar = asUnc.Groups[1].Value,
+				Server = asUnc.Groups[3].Value,
+				Share = asUnc.Groups[5].Value,
+			};
+			oResult.Volume = oResult.Server + asUnc.Groups[4].Value.Replace('/', System.IO.Path.DirectorySeparatorChar);
+			return true;
+		}
+
+
+		/// <summary>
+		/// 「.」または「?」
+		/// </summary>
+		/// <value></value>
+		public string SignChar { get; private set; } = string.Empty;
+
+		/// <summary>
+		/// サーバ
+		/// </summary>
+		/// <value></value>
+		public string Server { get; private set; } = string.Empty;
+
+		/// <summary>
+		/// 共有名
+		/// </summary>
+		/// <value></value>
+		public string Share { get; private set; } = string.Empty;
+
+		/// <summary>
+		///  UNC におけるボリュームは、 "Server\ShareName" のような文字列
+		/// </summary>
+		/// <value></value>
+		public string Volume { get; private set; } = string.Empty;
+
+		override public string ToString()
+			=> $@"\\{SignChar}\UNC\{Volume}";
+	}
+
+
+	/// <summary>
+	/// - "\\server\share-name\dir\file.txt"
+	/// </summary>
+	public class Unc : IPathPrefix, IShared
+	{
+		/// <summary>
+		/// matches "//server/share-name"
+		/// </summary>
+		public static readonly Regex PrefixPattern = new Regex(@"^//([^/]+)/+([^/]+)");
+
+
+		public static bool TryParse(Internal.FilepathScanner aScan, [NotNullWhen(true)] out Unc? oResult)
+		{
+			oResult = null;
+
+			if (! aScan.Skip(PrefixPattern, out var match))
+			{
+				return false;
+			}
+
+			oResult = new Unc();
+			oResult.Server = match.Groups[1].Value;
+			oResult.Share = match.Groups[2].Value;
+			return true;
+		}
+
+
+		/// <summary>
+		/// サーバ名。「LOCALHOST」など。
+		/// </summary>
+		/// <value></value>
+		public string Server { get; private set; } = string.Empty;
+
+
+		/// <summary>
+		/// 共有名。「C$」「shared」など。
+		/// </summary>
+		/// <value></value>
+		public string Share { get; private set; } = string.Empty;
+
+
+		override public string ToString()
+			=> $@"\\{Server}\{Share}";
+	}
+
+
+
+	/// <summary>
+	/// Traditional DOS
+	/// </summary>
+	public class Dos : IHasDrive
+	{
+		/// <summary>
+		/// matches "c:", "G:" etc...
+		/// </summary>
+		/// <returns></returns>
+		public static readonly Regex PrefixPattern = new Regex(@"^([a-zA-Z])" + Internal.FilepathParsingHelper.MsdosVolumeSeparatorChar);
+
+
+		public static bool TryParse(Internal.FilepathScanner aScan, [NotNullWhen(true)] out Dos? oResult)
+		{
+			oResult = null;
+
+			if (! aScan.Skip(PrefixPattern, out var match))
+			{
+				return false;
+			}
+
+			oResult = new Dos
+			{
+				Drive = match.Value,
+				DriveLetter = match.Groups[1].Value,
+			};
+
+			return true;
+		}
+
+
+		/// <summary>
+		/// drive ("C:" , "Z:", and so on....)
+		/// </summary>
+		/// <value></value>
+		public string Drive { get; private set; } = string.Empty;
+
+
+		/// <summary>
+		/// drive letter
+		/// </summary>
+		/// <value></value>
+		public string DriveLetter { get; private set; } = string.Empty;
+
+
+		/// <summary>
+		/// drive (or volume) + volume separator
+		/// </summary>
+		/// <returns></returns>
+		override public string ToString() => Drive;
+	}
+}
+
+
+namespace Tkuri2010.Fsuty.Internal
+{
+	public static class Logics
 	{
 		public static readonly ReadOnlyCollection<string> EmptyStringArray = new(new string[0]{ });
 
 		public static readonly LinkedCollection<string> EmptyStringLinkedCollection = new();
-
-		public enum FileSystemSeems
-		{
-			_Unknown,
-			Unix,
-			Win32,
-		}
-
-
-		public static FileSystemSeems DetectFileSystem()
-		{
-			var c1 = System.IO.Path.DirectorySeparatorChar;
-			var c2 = System.IO.Path.AltDirectorySeparatorChar;
-			var v = System.IO.Path.VolumeSeparatorChar;
-			if (c1 == '/' && c2 == '/' && v == '/')
-			{
-				return FileSystemSeems.Unix;
-			}
-
-			if (((c1 == '/' && c2 == '\\') || (c1 == '\\' && c2 == '/'))
-				&& v == ':')
-			{
-				return FileSystemSeems.Win32;
-			}
-
-			return FileSystemSeems._Unknown;
-		}
-
-
-		private static FileSystemSeems _detectedFileSystem = FileSystemSeems._Unknown;
-
-
-		private static FileSystemSeems _DetectAndCacheFileSystem()
-		{
-			if (_detectedFileSystem == FileSystemSeems._Unknown)
-			{
-				_detectedFileSystem = DetectFileSystem();
-			}
-
-			return _detectedFileSystem;
-		}
-
-
-		public static bool SeemsUnixFileSystem => _DetectAndCacheFileSystem() == FileSystemSeems.Unix;
-
-
-		public static bool SeemsWin32FileSystem => _DetectAndCacheFileSystem() == FileSystemSeems.Win32;
 
 
 		/// <summary>
@@ -197,194 +854,129 @@ namespace Tkuri2010.Fsuty
 
 			return builder.ToString();
 		}
-
 	}
 
-	public class PathItems : IReadOnlyList<string>
+
+	public class FilepathScanner
 	{
-		public static readonly PathItems Empty = new();
+		public string Input { get; private set; }
 
-#if USE_LINKEDCOLLECTION
-		private LinkedCollection<string> mItems = PathLogics.EmptyStringLinkedCollection;
 
-		internal PathItems(IEnumerable<string> items)
+		public FilepathScanner(string input)
 		{
-			mItems = new(items);
-		}
-
-		internal PathItems(LinkedCollection<string> items)
-		{
-			mItems = items;
-		}
-
-#else
-		private IReadOnlyList<string> mItems =  PathLogics.EmptyStringArray;
-
-		internal PathItems(IEnumerable<string> items)
-		{
-			mItems = new ReadOnlyCollection<string>(items.ToList());
-		}
-#endif
-
-
-		internal PathItems()
-		{
+			Input = input;
 		}
 
 
-		private string? mStringCache = null;
-
-
-		override public string ToString()
+		public bool Skip(Regex regex)
 		{
-			if (mStringCache == null)
+			return Skip(regex, out var _m);
+		}
+
+
+		public bool Skip(Regex regex, out Match oMatchResult)
+		{
+			oMatchResult = regex.Match(Input);
+
+			if (oMatchResult.Success)
 			{
-				mStringCache = ToString(System.IO.Path.DirectorySeparatorChar);
-			}
-			return mStringCache;
-		}
-
-
-		virtual public string ToString(char directorySeparatorChar)
-		{
-			return PathLogics.JoinString(directorySeparatorChar, mItems);
-		}
-
-
-		public PathItems CombineItems(PathItems items)
-		{
-			if (items.Count == 0)
-			{
-				return this;
+				Input = Input.Substring(oMatchResult.Length);
 			}
 
-			return new PathItems(PathLogics.Concat(mItems, items.mItems));
+			return oMatchResult.Success;
 		}
-
-
-		/// <summary>
-		/// 1. マイナスのstartは末尾からの距離と考え、1ステップだけ補正する
-		/// 2. マイナスのcountは、末尾からいくつ削るかの指定とみなす
-		/// 3. 大きなcountは補正する
-		/// 4. 補正後のstartが範囲外の場合はパスを空にする
-		/// </summary>
-		/// <param name="start">マイナス指定も可</param>
-		/// <param name="count">マイナス指定も可</param>
-		/// <returns></returns>
-		public PathItems SliceItems(int start, int count = int.MaxValue) =>
-				new PathItems(PathLogics.SliceItems(mItems, start, count));
-
-
-		/// <summary>
-		/// 指定した数だけディレクトリをさかのぼる。Slice(0, -level) と同じ。
-		/// </summary>
-		/// <param name="level">省略時1。何段階ディレクトリをさかのぼるかを指定</param>
-		/// <returns></returns>
-		public PathItems AscendItems(int level = 1) => SliceItems(0, -level);
-
-
-		/// <summary>
-		/// ディレクトリを1段階さかのぼる。Ascemd() と同じ。また、Slice(0, -1) とも同じ。
-		/// </summary>
-		/// <returns></returns>
-		public PathItems ParentItems => AscendItems();
-
-
-		/// <summary>
-		/// "." は削除し、".." は解決する。
-		/// 少なくとも以下の点について、Win32 PathCanonicalize() 互換。
-		/// - 先頭の ".." は削除
-		/// - "..." はそのまま残る
-		/// </summary>
-		/// <returns></returns>
-		public PathItems CanonicalizeItems() => new PathItems(PathLogics.CanonicalizeItems(mItems));
-
-
-		/// <summary>(implements IReadOnlyList)</summary>
-		public int Count => mItems.Count;
-
-
-		/// <summary>(implements IReadOnlyList)</summary>
-		public string this[int index] => mItems[index];
-
-
-		/// <summary>(implements IReadOnlyList)</summary>
-		public IEnumerator<string> GetEnumerator() => mItems.GetEnumerator();
-
-
-		/// <summary>(implements IReadOnlyList)</summary>
-		IEnumerator IEnumerable.GetEnumerator() => mItems.GetEnumerator();
 	}
 
 
-    public class Filepath
-    {
+	public static class FilepathParsingHelper
+	{
+		public enum FileSystemSeems
+		{
+			_Unknown,
+			Unix,
+			Win32,
+		}
+
+
+		public static FileSystemSeems DetectFileSystem()
+		{
+			var c1 = System.IO.Path.DirectorySeparatorChar;
+			var c2 = System.IO.Path.AltDirectorySeparatorChar;
+			var v = System.IO.Path.VolumeSeparatorChar;
+			if (c1 == '/' && c2 == '/' && v == '/')
+			{
+				return FileSystemSeems.Unix;
+			}
+
+			if (((c1 == '/' && c2 == '\\') || (c1 == '\\' && c2 == '/'))
+				&& v == ':')
+			{
+				return FileSystemSeems.Win32;
+			}
+
+			return FileSystemSeems._Unknown;
+		}
+
+
+		private static FileSystemSeems _detectedFileSystem = FileSystemSeems._Unknown;
+
+
+		private static FileSystemSeems _DetectAndCacheFileSystem()
+		{
+			if (_detectedFileSystem == FileSystemSeems._Unknown)
+			{
+				_detectedFileSystem = DetectFileSystem();
+			}
+
+			return _detectedFileSystem;
+		}
+
+
+		public static bool SeemsUnixFileSystem => _DetectAndCacheFileSystem() == FileSystemSeems.Unix;
+
+
+		public static bool SeemsWin32FileSystem => _DetectAndCacheFileSystem() == FileSystemSeems.Win32;
+
+
+		public static IFilepathParser GetSystemDefaultFilepathParser()
+		{
+			if (SeemsUnixFileSystem)
+			{
+				return new UnixFilepathParser();
+			}
+			else
+			{
+				return new Win32FilepathParser();
+			}
+		}
+
+
 		/// <summary>
 		/// character ":"
 		/// </summary>
 		public static readonly char MsdosVolumeSeparatorChar = ':';
 
 
-		static readonly Regex SeparatingPattern = new Regex("^/+");
+		public static readonly Regex SeparatingPattern = new Regex("^/+");
 
 
-		static readonly Regex ItemPattern = new Regex("^([^/]+)");
+		public static readonly Regex ItemPattern = new Regex("^([^/]+)");
 
 
-		public static readonly Filepath Empty = new Filepath();
-
-
-		/// <summary>
-		/// <example>
-		/// Traditional DOS path
-		/// <code>
-		/// var normal_abs  = Parse(@"C:\dir\file.txt");
-		/// var normal_rel  = Parse(@"relative\dir\and\file.txt");
-		/// var simple_abs  = Parse(@"\");
-		/// var simple_abs2 = Parse(@"C:\");
-		/// var drive_rel   = Parse(@"C:");  // specifies a drive, but relative
-		/// var drive_rel_2 = Parse(@"D:drive-and-relative\dir\file");
-		/// </code>
-		///
-		/// DOS Device path
-		/// <code>Parse(@"\\?\volume/dir/more-dir/.git");</code>
-		///
-		/// UNC path
-		/// <code>Parse(@"\\server\share-name\dir\file");</code>
-		///
-		/// UNIX
-		/// <code>
-		///   Parse("/usr/local/bin");
-		///   Parse("/");  // root
-		/// </code>
-		/// </example>
-		/// </summary>
-		/// <param name="aInput"></param>
-		/// <returns></returns>
-		public static Filepath Parse(string? aInput)
+		public static IEnumerable<string> ParsePath(FilepathScanner aScan)
 		{
-			if (string.IsNullOrEmpty(aInput))
+			while (aScan.Skip(ItemPattern, out var match))
 			{
-				return Empty;
+				yield return match.Groups[1].Value;
+
+				aScan.Skip(SeparatingPattern);
 			}
-
-			var scan = new FilepathScanner(aInput);
-
-			var self = new Filepath();
-			self.Prefix = _ParsePrefix(scan);
-			self.IsAbsolute = scan.Skip(SeparatingPattern);
-			self.Items = new(_ParsePath(scan));
-			return self;
 		}
 
 
-		static IPathPrefix _ParsePrefix(FilepathScanner aScan)
+		public static IPathPrefix ParseWin32PathPrefix(FilepathScanner aScan)
 		{
-			if (! PathLogics.SeemsWin32FileSystem)
-			{
-				return PathPrefix.None.Instance;
-			}
-			else if (PathPrefix.Dos.TryParse(aScan, out var traDos))
+			if (PathPrefix.Dos.TryParse(aScan, out var traDos))
 			{
 				return traDos;
 			}
@@ -409,563 +1001,51 @@ namespace Tkuri2010.Fsuty
 				return PathPrefix.None.Instance;
 			}
 		}
+	}
 
 
-		static IEnumerable<string> _ParsePath(FilepathScanner aScan)
-		{
-			while (aScan.Skip(ItemPattern, out var match))
-			{
-				yield return match.Groups[1].Value;
-
-				aScan.Skip(SeparatingPattern);
-			}
-		}
-
-
-		/// <summary>
-		/// Win32向け。UNIX的なパスの場合は空を表す PathPrefix.None 固定
-		/// </summary>
-		/// <value></value>
-		public IPathPrefix Prefix { get; private set; } = PathPrefix.None.Instance;
-
-
-		public bool IsAbsolute { get; private set; } = false;
-
-
-		public PathItems Items { get; private set; } = PathItems.Empty;
-
-
-		/// <summary>
-		/// Itemsの最後の部分。存在しない場合はstring.Emptyを返す
-		/// </summary>
-		public string LastItem => Items.LastOrDefault() ?? string.Empty;
-
-
-		/// <summary>
-		/// 範囲未チェックのため使用注意
-		/// </summary>
-		private string _LastItem => Items[Items.Count - 1];
-
-
-		public bool HasExtension
-				=> Items.Count <= 0
-					? false
-					: System.IO.Path.HasExtension(_LastItem);
-
-		/// <summary>
-		/// System.IO.Path.GetExtension()に準じる。拡張子が無い場合はstring.Emptyを返す
-		/// </summary>
-		public string Extension
-				=> Items.Count <= 0
-					? string.Empty
-					: System.IO.Path.GetExtension(_LastItem);
-
-
-		/// <summary>
-		/// Itemsの最後の部分。存在しない場合はstring.Emptyを返す。
-		///
-		/// System.IO.Path.GetFileNameWithoutExtension() に依存する。
-		/// 不正な文字が含まれている場合、System.ArgumentException が発生する
-		/// </summary>
-		public string LastItemWithoutExtension
-				=> Items.Count == 0
-					? string.Empty
-					: System.IO.Path.GetFileNameWithoutExtension(_LastItem);
-
-
-		private Filepath()
-		{
-		}
-
-
-		private string? mStringCache = null;
-
-
-		override public string ToString()
-		{
-			if (mStringCache == null)
-			{
-				mStringCache = ToString(System.IO.Path.DirectorySeparatorChar);
-			}
-			return mStringCache;
-		}
-
-
-		public string ToString(char directorySeparatorChar)
-		{
-			return Prefix.ToString()
-					+ (IsAbsolute ? directorySeparatorChar : "")
-					+ Items.ToString(directorySeparatorChar);
-		}
-
-
-		public Filepath Combine(PathItems items)
-		{
-			if (items.Count == 0)
-			{
-				return this;
-			}
-
-			return new Filepath
-			{
-				Prefix = this.Prefix,
-				IsAbsolute = this.IsAbsolute,
-				Items = this.Items.CombineItems(items),
-			};
-		}
-
-
-		/// <summary>
-		///  var fp = Filepath.Parse(@"C:\d1\d2\d3\file.txt");
-		///  var sub = fp.Slice(1, 2); //=> Prefix="C:",  Items= [ d2, d3 ]
-		///  sub.ToString();  //=> "C:d2/d3"  (a prefix and RELATIVE paths)
-		///
-		/// 1. マイナスのstartは末尾からの距離と考え、1ステップだけ補正する
-		/// 2. マイナスのcountは、末尾からいくつ削るかの指定とみなす
-		/// 3. 大きなcountは補正する
-		/// 4. 補正後のstartが範囲外の場合はパスを空にする
-		/// </summary>
-		/// <param name="start">マイナス指定も可</param>
-		/// <param name="count">マイナス指定も可</param>
-		/// <returns></returns>
-		public Filepath Slice(int start, int count = int.MaxValue)
-		{
-			var fixedHead =  PathLogics._FixHeadIndex(Items.Count, start);
-
-			return new Filepath
-			{
-				Prefix = this.Prefix,
-
-				// 開始位置が 0 であれば、this.IsAbsolute を踏襲。そうでなければ常に相対パスとなる
-				IsAbsolute = (fixedHead == 0) ? this.IsAbsolute : false,
-
-				Items = Items.SliceItems(start, count),
-			};
-		}
-
-
-		/// <summary>
-		/// 指定した数だけディレクトリをさかのぼる。Slice(0, -aLevel) と同じ。
-		/// </summary>
-		/// <param name="level">省略時1。何段階ディレクトリをさかのぼるかを指定</param>
-		/// <returns></returns>
-		public Filepath Ascend(int level = 1) => Slice(0, -level);
-
-
-		/// <summary>
-		/// ディレクトリを1段階さかのぼる。Ascemd() と同じ。また、Slice(0, -1) とも同じ。
-		/// </summary>
-		/// <returns></returns>
-		public Filepath Parent => Ascend();
-
-
-		/// <summary>
-		/// "." は削除し、".." は解決する。
-		/// 少なくとも以下の点について、Win32 PathCanonicalize() 互換。
-		/// - 先頭の ".." は削除
-		/// - "..." はそのまま残る
-		/// </summary>
-		/// <returns></returns>
-		public Filepath Canonicalize()
-		{
-			return new Filepath
-			{
-				Prefix = Prefix,
-				IsAbsolute = IsAbsolute,
-				Items = Items.CanonicalizeItems(),
-			};
-		}
-    }
-
-
-	public class FilepathScanner
+	public class UnixFilepathParser : IFilepathParser
 	{
-		public string Input { get; private set; }
-
-
-		public static string _Prepare(string input)
+		public Filepath Parse(string? path)
 		{
-			return PathLogics.SeemsWin32FileSystem ? input.Replace('\\', '/')
-				: input;
-		}
-
-
-		public FilepathScanner(string input)
-		{
-			Input = _Prepare(input);
-		}
-
-
-		public bool Skip(Regex regex)
-		{
-			return Skip(regex, out var _m);
-		}
-
-
-		public bool Skip(Regex regex, out Match oMatchResult)
-		{
-			oMatchResult = regex.Match(Input);
-
-			if (oMatchResult.Success)
+			if (string.IsNullOrEmpty(path))
 			{
-				Input = Input.Substring(oMatchResult.Length);
+				return Filepath.Empty;
 			}
 
-			return oMatchResult.Success;
+			var scan = new Internal.FilepathScanner(path);
+
+			var self = new Filepath();
+			self.Prefix = PathPrefix.None.Instance;
+			self.IsAbsolute = scan.Skip(FilepathParsingHelper.SeparatingPattern);
+			self.Items = new(FilepathParsingHelper.ParsePath(scan));
+			return self;
 		}
 	}
 
 
-	public interface IPathPrefix
+	public class Win32FilepathParser : IFilepathParser
 	{
-	}
-}
-
-
-namespace Tkuri2010.Fsuty.PathPrefix
-{
-	public class None : IPathPrefix
-	{
-		public static readonly None Instance = new None();
-
-		override public string ToString()
+		public Filepath Parse(string? path)
 		{
-			return string.Empty;
-		}
-	}
-
-
-	public interface IDosDevice : IPathPrefix
-	{
-		string SignChar { get; }
-
-		string Volume { get; }
-	}
-
-
-	public interface IHasDrive : IPathPrefix
-	{
-		/// <summary>
-		/// ドライブ名。"C:" などコロン付き
-		/// </summary>
-		/// <value></value>
-		string Drive { get; }
-
-		/// <summary>
-		/// ドライブ文字
-		/// </summary>
-		/// <value></value>
-		string DriveLetter { get; }
-	}
-
-
-	public interface IShared
-	{
-		/// <summary>
-		/// サーバ
-		/// </summary>
-		/// <value></value>
-		string Server { get; }
-
-		/// <summary>
-		/// 共有名
-		/// </summary>
-		/// <value></value>
-		string Share { get; }
-	}
-
-
-	/// <summary>
-	/// - "\\.\VOLUME{ASDFASDF}\foo\bar.txt"
-	/// </summary>
-	public class DosDevice : IDosDevice
-	{
-		/// <summary>
-		/// matches "//./", "//?/"
-		/// </summary>
-		public static readonly Regex PrefixPattern = new Regex(@"^//(\.|\?)(?=/)");
-
-
-		/// <summary>
-		/// matches "/volume-string", "/C:"   ~~"/C$"~~ ←これは勘違い
-		/// </summary>
-		public static readonly Regex VolumePattern = new Regex(@"^/+([^/]+)");
-
-
-		public static bool TryParse(FilepathScanner aScan, [NotNullWhen(true)] out DosDevice? oResult)
-		{
-			oResult = null;
-
-			if (! aScan.Skip(PrefixPattern, out var match))
+			if (string.IsNullOrEmpty(path))
 			{
-				return false;
+				return Filepath.Empty;
 			}
 
-			oResult = new DosDevice();
-			oResult.SignChar = match.Groups[1].Value;
+			var scan = PrepareScanner(path);
 
-			if (aScan.Skip(VolumePattern, out var volumePart))
-			{
-				// \\.\some-volume\...
-				oResult.Volume = volumePart.Groups[1].Value;
-			}
-
-			return true;
+			var self = new Filepath();
+			self.Prefix = FilepathParsingHelper.ParseWin32PathPrefix(scan);
+			self.IsAbsolute = scan.Skip(FilepathParsingHelper.SeparatingPattern);
+			self.Items = new(FilepathParsingHelper.ParsePath(scan));
+			return self;
 		}
 
 
-		/// <summary>
-		/// 「.」または「?」
-		/// </summary>
-		/// <value></value>
-		public string SignChar { get; private set; } = string.Empty;
-
-
-		/// <summary>
-		/// ボリューム文字列。"VOLUME{ASDFASDF}"など
-		/// </summary>
-		/// <value></value>
-		public string Volume { get; private set; } = string.Empty;
-
-
-		override public string ToString()
-			=> $@"\\{SignChar}\{Volume}";
-	}
-
-
-	/// <summary>
-	/// - "\\?\C:\foo\bar.txt"
-	/// - "//?/C:/foo/bar.txt" (forward slash allowed)
-	/// - ~~"\\?\C$\foo\bar.txt"~~  これは違う。何か勘違いしていた？
-	/// </summary>
-	public class DosDeviceDrive : IDosDevice, IHasDrive
-	{
-		/// <summary>
-		/// matches "//./C:", "//?/R:"
-		/// </summary>
-		public static readonly Regex PrefixPattern = new Regex(
-			 	(@"^//(\.|\?)"
-					+ @"/(([a-zA-Z])" + Filepath.MsdosVolumeSeparatorChar + ")")
-				.Replace(" ", ""));
-
-
-		public static bool TryParse(FilepathScanner aScan, [NotNullWhen(true)] out DosDeviceDrive? oResult)
+		public static FilepathScanner PrepareScanner(string inputPath)
 		{
-			oResult = null;
-
-			if (! aScan.Skip(PrefixPattern, out var match))
-			{
-				return false;
-			}
-
-			oResult = new DosDeviceDrive
-			{
-				SignChar = match.Groups[1].Value,
-				Drive = match.Groups[2].Value,
-				DriveLetter = match.Groups[3].Value,
-			};
-
-			return true;
+			return new FilepathScanner(inputPath.Replace('\\', '/'));
 		}
-
-
-		/// <summary>
-		/// 「.」または「?」
-		/// </summary>
-		/// <value></value>
-		public string SignChar { get; private set; } = string.Empty;
-
-
-		/// <summary>
-		/// drive ("C:" , "Z:", and so on....)
-		/// </summary>
-		/// <value></value>
-		public string Drive { get; private set; } = string.Empty;
-
-
-		/// <summary>
-		/// drive letter
-		/// </summary>
-		/// <value></value>
-		public string DriveLetter { get; private set; } = string.Empty;
-
-
-		/// <summary>
-		/// ドライブ指定のパスにおける「ボリューム」とは、"C:" など
-		/// </summary>
-		/// <value></value>
-		public string Volume => Drive;
-
-
-		/// <summary>
-		/// "\\.\" + drive (or volume) + volume separator
-		/// </summary>
-		/// <returns></returns>
-		override public string ToString() => $@"\\{SignChar}\{Volume}";
-	}
-
-
-	/// <summary>
-	/// - "\\?\UNC\server\share-name\foo\bar.txt"
-	/// - "\\?\UNC\127.0.0.1\share-name\foo\bar.txt"
-	/// </summary>
-	public class DosDeviceUnc : IDosDevice, IShared
-	{
-		/// <summary>
-		/// matches "//./UNC", "//./UNC/server", "//?/UNC/server/share-name"
-		/// </summary>
-		public static readonly Regex UncPattern = new Regex(
-				@"^//(\.|\?)/UNC (/+ (W+) (/+ (W+) )? )?"
-				.Replace("W", "[^/]")
-				.Replace(" ", "")
-				);
-
-
-		public static bool TryParse(FilepathScanner aScan, [NotNullWhen(true)] out DosDeviceUnc? oResult)
-		{
-			oResult = null;
-
-			if (! aScan.Skip(UncPattern, out var asUnc))
-			{
-				return false;
-			}
-
-			oResult = new DosDeviceUnc
-			{
-				SignChar = asUnc.Groups[1].Value,
-				Server = asUnc.Groups[3].Value,
-				Share = asUnc.Groups[5].Value,
-			};
-			oResult.Volume = oResult.Server + asUnc.Groups[4].Value.Replace('/', System.IO.Path.DirectorySeparatorChar);
-			return true;
-		}
-
-
-		/// <summary>
-		/// 「.」または「?」
-		/// </summary>
-		/// <value></value>
-		public string SignChar { get; private set; } = string.Empty;
-
-		/// <summary>
-		/// サーバ
-		/// </summary>
-		/// <value></value>
-		public string Server { get; private set; } = string.Empty;
-
-		/// <summary>
-		/// 共有名
-		/// </summary>
-		/// <value></value>
-		public string Share { get; private set; } = string.Empty;
-
-		/// <summary>
-		///  UNC におけるボリュームは、 "Server\ShareName" のような文字列
-		/// </summary>
-		/// <value></value>
-		public string Volume { get; private set; } = string.Empty;
-
-		override public string ToString()
-			=> $@"\\{SignChar}\UNC\{Volume}";
-	}
-
-
-	/// <summary>
-	/// - "\\server\share-name\dir\file.txt"
-	/// </summary>
-	public class Unc : IPathPrefix, IShared
-	{
-		/// <summary>
-		/// matches "//server/share-name"
-		/// </summary>
-		public static readonly Regex PrefixPattern = new Regex(@"^//([^/]+)/+([^/]+)");
-
-
-		public static bool TryParse(FilepathScanner aScan, [NotNullWhen(true)] out Unc? oResult)
-		{
-			oResult = null;
-
-			if (! aScan.Skip(PrefixPattern, out var match))
-			{
-				return false;
-			}
-
-			oResult = new Unc();
-			oResult.Server = match.Groups[1].Value;
-			oResult.Share = match.Groups[2].Value;
-			return true;
-		}
-
-
-		/// <summary>
-		/// サーバ名。「LOCALHOST」など。
-		/// </summary>
-		/// <value></value>
-		public string Server { get; private set; } = string.Empty;
-
-
-		/// <summary>
-		/// 共有名。「C$」「shared」など。
-		/// </summary>
-		/// <value></value>
-		public string Share { get; private set; } = string.Empty;
-
-
-		override public string ToString()
-			=> $@"\\{Server}\{Share}";
-	}
-
-
-
-	/// <summary>
-	/// Traditional DOS
-	/// </summary>
-	public class Dos : IHasDrive
-	{
-		/// <summary>
-		/// matches "c:", "G:" etc...
-		/// </summary>
-		/// <returns></returns>
-		public static readonly Regex PrefixPattern = new Regex(@"^([a-zA-Z])" + Filepath.MsdosVolumeSeparatorChar);
-
-
-		public static bool TryParse(FilepathScanner aScan, [NotNullWhen(true)] out Dos? oResult)
-		{
-			oResult = null;
-
-			if (! aScan.Skip(PrefixPattern, out var match))
-			{
-				return false;
-			}
-
-			oResult = new Dos
-			{
-				Drive = match.Value,
-				DriveLetter = match.Groups[1].Value,
-			};
-
-			return true;
-		}
-
-
-		/// <summary>
-		/// drive ("C:" , "Z:", and so on....)
-		/// </summary>
-		/// <value></value>
-		public string Drive { get; private set; } = string.Empty;
-
-
-		/// <summary>
-		/// drive letter
-		/// </summary>
-		/// <value></value>
-		public string DriveLetter { get; private set; } = string.Empty;
-
-
-		/// <summary>
-		/// drive (or volume) + volume separator
-		/// </summary>
-		/// <returns></returns>
-		override public string ToString() => Drive;
 	}
 }

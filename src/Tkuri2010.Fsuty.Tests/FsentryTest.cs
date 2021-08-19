@@ -27,7 +27,12 @@ namespace Tkuri2010.Fsuty.Tests
 
 		private static void CleanupTempDir(Filepath tempDir)
 		{
-			Directory.Delete(tempDir.ToString(), recursive: true);
+			var dirString = tempDir.ToString();
+			if (dirString.Length < "/tmp".Length) // テストに使ったディレクトリ名は「/tmp」よりは長いはず
+			{
+				throw new Exception($"FsentryTest: CleanupTempDir: invalid tempDir: {dirString}");
+			}
+			Directory.Delete(dirString, recursive: true);
 		}
 
 

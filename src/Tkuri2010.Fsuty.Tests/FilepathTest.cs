@@ -185,7 +185,7 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.AreEqual(string.Empty, path.LastItemWithoutExtension);
 			}
 
-			if (PathLogics.SeemsWin32FileSystem)
+			if (Internal.FilepathParsingHelper.SeemsWin32FileSystem)
 			{
 				var path = Filepath.Parse("c:/dir/.git");
 				Assert.AreEqual(string.Empty, path.LastItemWithoutExtension);
@@ -421,6 +421,33 @@ namespace Tkuri2010.Fsuty.Tests
 			{
 				var path = Filepath.Parse("./../dir/.../xxx/../file.txt");
 				Assert.AreEqual("dir/.../file.txt", path.Canonicalize().ToString('/'));
+			}
+		}
+
+
+		/// <summary>
+		/// AScend() は実質 Slice() なので、テストは簡易的
+		/// </summary>
+		[TestMethod]
+		public void Test_Ascend()
+		{
+			var path = Filepath.Parse("/dir1/dir2/dir3/file.txt");
+			Assert.IsTrue(path.IsAbsolute);
+			Assert.AreEqual(4, path.Items.Count);
+			Assert.AreEqual("file.txt", path.LastItem);
+
+			{
+				var a1 = path.Ascend();
+				Assert.IsTrue(a1.IsAbsolute);
+				Assert.AreEqual(3, a1.Items.Count);
+				Assert.AreEqual("dir3", a1.LastItem);
+			}
+
+			{
+				 var a2 = path.Ascend(2);
+				Assert.IsTrue(a2.IsAbsolute);
+				Assert.AreEqual(2, a2.Items.Count);
+				Assert.AreEqual("dir2", a2.LastItem);
 			}
 		}
 	}
