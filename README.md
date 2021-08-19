@@ -3,46 +3,175 @@ Local Files and Directories Utility (Path descriptor, Directory tree walker, etc
 
 ## Classes
 
-### `Filepath` (namespace `Tkuri2010.Fsuty`)
+- `Filepath` (namespace `Tkuri2010.Fsuty`)
+	- File path parser / descriptor
+- `Fsentry` (namespace `Tkuri2010.Fsuty`)
+	- Files and directories enumeration utility.
+- (side-product) `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
+	- Unique formed collection class.
+
+## How to use in your project.
+
+I'm not sure yet that this is a library worth publishing on nuget.
+
+How to get the `*.nupkg`:
+
+```ps
+PS> cd src\Tkuri2010.Fsuty
+
+PS> dotnet pack -c Release
+```
+
+## class `Filepath` (namespace `Tkuri2010.Fsuty`)
 
 File path parser / descriptor.
 ```cs
 	var path = Filepath.Parse(@"C:\dir1\dir2\file.dat");
 
-	var another = path.Parent.Combine(@"another_file.dat");
-		//=> C:\dir1\dir2\another_file.dat
+	var another = Filepath.Parse("more/another_file.dat");
+
+	var combined = path.Parent.Combine(another.Items);
+		//=> C:\dir1\dir2\more\another_file.dat
+
+	Console.WriteLine(combined.IsAbsolute);
+		//=> true
+	Console.WriteLine(combined.Items[0]);
+		//=> dir1
+	Console.WriteLine(combined.Items[1]);
+		//=> dir2
+	Console.WriteLine(combined.LastItem);
+		//=> another_file.dat
+	Console.WriteLine(combined.Extension);
+		//=> .dat
 ```
 
-### `Fsentry` (namespace `Tkuri2010.Fsuty`)
+more formats are supported:
+```cs
+	var unix = Filepath.Parse("/home/tkuri2010/dir/file.txt");
+	if (unix.Prefix is PathPrefix.None none)
+	{
+		Console.WriteLine("UNIX path doesn't have prefix.");
+	}
+
+	var dosDevice  = Filepath.Parse(@"\\.\Volume{cafebabe-cafebabe}\dir\file.txt");
+	var dosDevice2 = Filepath.Parse(@"//./Volume{cafebabe-cafebabe}/dir/file.txt"); // forward slashes are ok!
+	if (dosDevice.Prefix is PathPrefix.DosDevice dosDevicePrefix)
+	{
+		Console.WriteLine(dosDevicePrefix.Volume);
+			//=> Volume{cafebabe-cafebabe}
+	}
+
+	var dosDeviceWithDrive = Filepath.Parse(@"\\.\C:\dir\file.txt");
+	if (dosDeviceWithDrice.Prefix is PathPrefix.DosDeviceDrive dosDeviceDrivePrefix)
+	{
+		Console.WriteLine(dosDeviceDrivePrefix.DriveLetter);
+			//=> C
+	}
+
+	var dosDeviceUnc = Filepath.Parse(@"\\.\UNC\192.168.11.15\share-name\dir\file.txt");
+	if (dosDeviceUnc.Prefix is PathPrefix.DosDeviceUnc dosDeviceUncPrefix)
+	{
+		Console.WriteLine(dosDeviceUncPrefix.Server);
+			//=> 192.168.11.15
+		Console.WriteLine(dosDeviceUncPrefix.Share);
+			//=> share-name
+	}
+
+	var unc = Filepath.Parse(@"\\server\share-name\dir\file.txt");
+	if (unc.Prefix is PathPrefix.Unc uncPrefix)
+	{
+		Console.WriteLine(uncPrefix.Server);
+		Console.WriteLine(uncPrefix.Share);
+	}
+
+	var traditionalDos = Filepath.Parse(@"c:\dir\file.txt");
+	if (traditionalDos.Prefix is PathPrefix.Dos dosPrefix)
+	{
+		Console.WriteLine(dosPrefix.DriveLetter);
+	}
+```
+
+
+### `Combine()` -- Why don't we have convenient `Combine(Filepath)` nor `Combine(string)` methods?
+
+We have only `Combine(PathItems)` method.
+```cs
+	var path = Filepath.Parse("/home/tkuri2010/dir");
+
+	// We can:
+	var rel = Filepath.Parse("more/file.txt");
+	var ok = path.Combine(rel.Items);
+		//=> /home/tkuri2010/dir/more/file.txt
+
+	// We cannot:
+	var x1 = path.Combine(rel);
+	var x2 = path.Combine(Filepath.Parse("more/file.txt"));
+	var x3 = path.Combine("more/file.txt");
+```
+
+Why?
+
+Consider this:
+
+```cs
+	var abs = Filepath.Parse("/opt/some-tmp");
+
+	var xxx = abs.Combine("/root");  //=> ... ???
+```
+Where does the `xxx` object point do you expect? `"/opt/some-tmp/root"`? or `"/root"`? I don't want to be confused by this design.
+
+I have no plans to provide `Combine(Filepath)` nor `Combine(string)` methods. We should remember that the `Combine(PathItems)` method takes a __RELATIVE path-items-object only__.
+
+But you can:
+```cs
+	PathItems heh(string path)
+	{
+		return Filepath.Parse(path).Items;
+	}
+
+	var abs = Filepath.Parse("/opt/some-tmp");
+
+	var xxx = abs.Combine(heh("/root"));
+```
+at your own risk.
+
+
+## class `Fsentry` (namespace `Tkuri2010.Fsuty`)
 
 Files and directories enumeration utility. Supports [Asynchronous streams](https://docs.microsoft.com/ja-jp/dotnet/csharp/whats-new/csharp-8#asynchronous-streams).
 
 ```cs
-	async Task DoMyWorkAsync(Filepath path, [EnumeratorCancellation] CancellationToken ct = default)
+	async Task DoMyWorkAsync(Filepath baseDir, [EnumeratorCancellation] CancellationToken ct = default)
 	{
 		// for example, we want to collect 100 files.
 		var first100Files = new List<Filepath>();
 
-		await foreach (var item in Fsentry.VisitAsync(path, ct))
+		await foreach (var item in Fsentry.VisitAsync(baseDir, ct))
 		{
+
+			// ex)
+			//   baseDir (argument)   =>  "F:\our\works"
+			//   item.FullPathString  =>  "F:\our\works\dir\more_dir\file.txt" (string)
+			//   item.RelativePath    =>               "dir\more_dir\file.txt" (Filepath object)
+
 			if (item.Event == FsentryEvent.EnterDir)
 			{
 				// we can skip walking on the specified directory.
-				if (item.Path.EndsWith(".git"))
+				if (item.FullPathString.EndsWith(".git"))
 				{
-					item.Command = FsentryCommand.Skip;
+					item.Command = FsentryCommand.SkipDirectory;
 					continue;
 				}
 
-				Console.WriteLine($"Enter Dir: {item.Path}");
+				Console.WriteLine($"Enter Dir: {item.FullPathString}");
 			}
 			else if (item.Event == FsentryEvent.LeaveDir)
 			{
-				Console.WriteLine($"Leave Dir: {item.Path}");
+				Console.WriteLine($"Leave Dir: {item.FullPathString}");
 			}
 			else // if (item.Event == FsentryEvent.File)
 			{
-				first100Files.Add(item.Path);
+				first100Files.Add(item.RelativePath);
 				if (100 <= first100Files.Count)
 				{
 					break;
@@ -55,57 +184,37 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 ```
 
 
-### `LargeFileLinesProcessor` (namespace `Tkuri2010.Fsuty.Text.Std`)
+## (side-product) class `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
 
-(hmm... not so fast I expected...)
-
-Process and filter large file lines.
-Using Memory Mapped File.
-Multi-Thread.
-
-See `src / Tkuri2010.Fsuty.Xmp / LineProcessorXmp1Grep.cs` for living example.
-
-```cs
-	public async Task PoormansGrep()
-	{
-		var largeFile = "our/very-large-log-file.log";
-		var pattern = new Regex(@"ERROR|WARN");
-
-		// Filter and Process.
-		// This func is executed in many threads.
-		// The argument `lineInfo` is a `LineInfo<string>`.
-		// You can use `LineInfo.Ok(v)` or `LineInfo.No()` for return value.
-		ProcessingFunc<string> processingFunc = (lineInfo) =>
-		{
-			// process as you like
-			var str = lineInfo.LineBytes.ToString(Encoding.UTF8);
-
-			// filter as you like
-			return pattern.Match(str).Success
-					? str  // or you can `lineInfo.Ok(str)` explicitly
-					: lineInfo.No();
-		};
-
-		// Dispose later.
-		using var processor = new LargeFileLinesProcessor<string>(largeFile, processingFunc);
-
-		await foreach (var result in processor.ProcessAsync())
-		{
-			// enumerates the result what you filtered
-			Console.Write($"{result.LineNumber}: {result.Value}");
-		}
-	}
-
+When we enumerates file-system-entries, we may hold path strings like:
 ```
-#### How does it work
+ "var" "log" "httpd"                       <-- one entry
+ "var" "log" "httpd" "server1"             <-- another entry
+ "var" "log" "httpd" "server1" "access"    <-- and more...
+ "var" "log" "httpd" "server1" "access.1"
+ "var" "log" "httpd" "server1" "access.2"
+ "var" "log" "httpd" "server2"
+ "var" "log" "httpd" "server2" "access"
+ "var" "log" "php-fpm"
+ "var" "log" "php-fpm" "error_log"
+ "var" "log" "php-fpm" "error_log.1"
+ ...
+```
 
-1. Specified file is divided into about 256Kbytes each, while finding `LF` character.
-1. One chunk is mapped to one thread.
-1. In the thread, each line is passed to your `processingFunc(lineInfo)` func sequentially.
-	- In your `processingFunc(lineInfo)` func, you can get the bytearray from `lineInfo.LineBytes` property, that has `ToString(encoding)` method.
-	- Process the bytearray / string as you want.
-	- If you accept the processed result, return the result (there is a implicit conversion), or you can use `lineInfo.Ok(result)` explicitly. If you reject it, return `lineInfo.No()`.
-1. The `processor` enumerates the processed result that you accept.
-
-![How works](memos/imgs/how_works.png)
+But, actualy, what we need are only these strings and links:
+```
+ "var"
+   `-  "log"
+         +-  "httpd"
+         |     +-  "server1"
+         |     |    +-  "access"
+         |     |    +-  "access.1"
+         |     |    `-  "access.2"
+         |     `-  "server2"
+         |           `-  "access"
+         +-  "php-fpm"
+         |     +-  "error_log"
+         |     +-  "error_log.1"
+```
+`LinkedCollection<E>` is designed to hold this structures efficiently.
 

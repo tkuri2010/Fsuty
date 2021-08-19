@@ -34,7 +34,7 @@ namespace Tkuri2010.Fsuty
 
 	public enum FsentryCommand
 	{
-		Continue,
+		Advance,
 
 		SkipDirectory,
 	}
@@ -64,7 +64,7 @@ namespace Tkuri2010.Fsuty
 		{
 			var q = new DirsFilesStack();
 
-			await q.EnumAndPushAsync(basePath, ct);
+			await q.EnumAndPushAsync(basePath, Filepath.Empty, ct);
 
 			while (q.HasMore)
 			{
@@ -77,11 +77,13 @@ namespace Tkuri2010.Fsuty
 					continue;
 				}
 
-				q.PushLeavingDir(entry.Path);
+				q.PushLeavingDir(entry);
 
-				if (entry.Command == FsentryCommand.Continue)
+				if (entry.Command == FsentryCommand.Advance)
 				{
-					await q.EnumAndPushAsync(entry.Path, ct);
+					var name = Filepath.Parse(Path.GetFileName(entry.FullPathString));
+					var relativeDir = entry.RelativePath.Parent.Combine(name.Items);
+					await q.EnumAndPushAsync(entry.FullPathString, relativeDir, ct);
 				}
 				else // skip requested
 				{
@@ -91,16 +93,41 @@ namespace Tkuri2010.Fsuty
 		}
 
 
-		public FsentryEvent Event { get; private set; }
+		public FsentryEvent Event { get; private set; } = FsentryEvent.None;
 
-		public string Path { get; private set; }
+		/// <summary>Raw result value from `System.IO.Directory.Enum***()` </summary>
+		public string FullPathString { get; private set; } = string.Empty;
 
-		public FsentryCommand Command  { get; set; } = FsentryCommand.Continue;
+		public Filepath RelativePath { get; private set; } = Filepath.Empty;
 
-		internal Fsentry(FsentryEvent ev, string rawResultPathString)
+		// public Filepath RelativeParent { get; private set; }
+
+		public FsentryCommand Command  { get; set; } = FsentryCommand.Advance;
+
+
+		internal Fsentry()
+		{
+		}
+
+
+		internal Fsentry(FsentryEvent ev, string rawFullPathString, Filepath relativeParentDir)
 		{
 			Event = ev;
-			Path = rawResultPathString;
+			FullPathString = rawFullPathString;
+			RelativePath = relativeParentDir.Combine(Filepath.Parse(Path.GetFileName(rawFullPathString)).Items);
+		}
+
+
+		internal static Fsentry AsLeavingDir(Fsentry enteringDir)
+		{
+			// assert: enteringDir.Event == FsentryEvent.EnterDir
+
+			return new()
+			{
+				Event = FsentryEvent.LeaveDir,
+				FullPathString = enteringDir.FullPathString,
+				RelativePath = enteringDir.RelativePath,
+			};
 		}
 	}
 
@@ -125,24 +152,24 @@ namespace Tkuri2010.Fsuty
 			return mStack.Pop();
 		}
 
-		internal void PushLeavingDir(string dirStr)
+		internal void PushLeavingDir(Fsentry dirEntry)
 		{
-			mStack.Push(new Fsentry(FsentryEvent.LeaveDir, dirStr));
+			mStack.Push(Fsentry.AsLeavingDir(dirEntry));
 		}
 
-		internal Task EnumAndPushAsync(string searchPathStr, CancellationToken ct)
+		internal Task EnumAndPushAsync(string searchPathStr, Filepath relativeHereDir, CancellationToken ct)
 		{
 			ct.ThrowIfCancellationRequested();
 
 			foreach (var file in Directory.EnumerateFiles(searchPathStr))
 			{
-				mStack.Push(new Fsentry(FsentryEvent.File, file));
+				mStack.Push(new Fsentry(FsentryEvent.File, file, relativeHereDir));
 				ct.ThrowIfCancellationRequested();
 			}
 
 			foreach (var dir in Directory.EnumerateDirectories(searchPathStr))
 			{
-				mStack.Push(new Fsentry(FsentryEvent.EnterDir, dir));
+				mStack.Push(new Fsentry(FsentryEvent.EnterDir, dir, relativeHereDir));
 				ct.ThrowIfCancellationRequested();
 			}
 
