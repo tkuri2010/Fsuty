@@ -10,11 +10,58 @@ Local Files and Directories Utility (Path descriptor, Directory tree walker, etc
 - (side-product) `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
 	- Unique formed collection class.
 
-## How to use in your project.
+## Download the `*.nupkg`
 
 I'm not sure yet that this is a library worth publishing on nuget.
 
-How to get the `*.nupkg`:
+Download:
+- [v1.0.0-beta.20210817](https://github.com/tkuri2010/Fsuty/releases/tag/v1.0.0-beta.20210817)
+
+### How to use downloaded `*.nupkg`
+
+I'm not sure but this is what I tried. Looks work. (Is there any official documentation? I could not find out yet..)
+
+Your project's structure:
+```
+  YourSolution/
+    +-- libs/
+    +    `--  Tkuri2010.Fsuty.1.0.0-foobar.nupkg     <-- where you downloded
+    `-- src/
+         +-- YourProject/
+	 +    +-- Nuget.Config          <-- Add this file
+	 +    +-- YourProject.csproj    <-- And edit your project file
+	 +    +-- ...
+	 `-- TestOfYourProject/
+	      +-- Nuget.Config
+	      +-- TestOfYourProject.csproj
+	      +-- ...
+```
+
+`Nuget.Config` file is as...
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <add key="local-packages" value="../../libs" />   <!-- relative path where you downloaded the *.nupkg -->
+  </packageSources>
+</configuration>
+```
+
+Edit `*.csproj` file...
+```xml
+<Project Sdk="(snip...)">
+  <ProjectGroup>
+    <!-- your project's settings here -->
+  </ProjectGroup>
+
+  <ItemGroup>
+    <!-- other dependencies here -->
+    <PackageReference Include="Tkuri2010.Fsuty" Version="1.0.0-foobar" />  <!-- add this -->
+  </ItemGroup>
+```
+
+
+## How to get the `*.nupkg`
 
 ```ps
 PS> cd src\Tkuri2010.Fsuty
