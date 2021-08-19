@@ -251,7 +251,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_PrefixOfDosDevice_Regex()
 		{
 			{
-				var src1 = FilepathScanner._Prepare(@"\\.\foo");
+				var src1 = @"//./foo";
 				var m1 = DosDevice.PrefixPattern.Match(src1);
 				Assert.IsTrue(m1.Success);
 				Assert.AreEqual(@".", m1.Groups[1].Value);
@@ -259,7 +259,7 @@ namespace Tkuri2010.Fsuty.Tests
 			}
 
 			{
-				var src2 = FilepathScanner._Prepare(@"\\?\foo");
+				var src2 = @"//?/foo";
 				var m2 = DosDevice.PrefixPattern.Match(src2);
 				Assert.IsTrue(m2.Success);
 				Assert.AreEqual(@"?", m2.Groups[1].Value);
@@ -272,7 +272,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_PrefixDosDevice_1()
 		{
 			var src = @"\\.\";
-			var scan = new FilepathScanner(src);
+			var scan = Internal.Win32FilepathParser.PrepareScanner(src);
 
 			Assert.IsTrue(DosDevice.TryParse(scan, out var prefix));
 		}
@@ -283,7 +283,7 @@ namespace Tkuri2010.Fsuty.Tests
 		{
 			Action<string> test_ = srcStr =>
 			{
-				var scan = new FilepathScanner(srcStr);
+				var scan = Internal.Win32FilepathParser.PrepareScanner(srcStr);
 				Assert.IsTrue(DosDeviceDrive.TryParse(scan, out var prefix));
 			};
 
@@ -298,7 +298,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_PrefixDosDevice_UNC1()
 		{
 			var src = @"\\.\UNC";
-			var scan = new FilepathScanner(src);
+			var scan = Internal.Win32FilepathParser.PrepareScanner(src);
 
 			Assert.IsTrue(DosDeviceUnc.TryParse(scan, out var prefix));
 		}
@@ -308,7 +308,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_PrefixDosDevice_UNC2()
 		{
 			var src = @"\\.\UNC\127.0.0.1";
-			var scan = new FilepathScanner(src);
+			var scan = Internal.Win32FilepathParser.PrepareScanner(src);
 
 			Assert.IsTrue(DosDeviceUnc.TryParse(scan, out var prefix));
 			Assert.AreEqual(@"127.0.0.1", prefix!.Server);
@@ -321,7 +321,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_PrefixDosDevice_UNC3()
 		{
 			var src = @"\\?\UNC\127.0.0.1\share-name";
-			var scan = new FilepathScanner(src);
+			var scan = Internal.Win32FilepathParser.PrepareScanner(src);
 
 			Assert.IsTrue(DosDeviceUnc.TryParse(scan, out var prefix));
 			Assert.AreEqual(@"127.0.0.1", prefix!.Server);
@@ -334,7 +334,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_PrefixDosDevice_Normal1()
 		{
 			var src = @"\\.\C:\dir\file.txt";
-			var scan = new FilepathScanner(src);
+			var scan = Internal.Win32FilepathParser.PrepareScanner(src);
 
 			Assert.IsTrue(DosDeviceDrive.TryParse(scan, out var prefix));
 			Assert.AreEqual(@"C:", prefix!.Volume);
@@ -345,7 +345,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_PrefixDosDevice_Normal2()
 		{
 			var src = @"\\.\Volume{xxx-xxx-xxx}\dir\file.txt";
-			var scan = new FilepathScanner(src);
+			var scan = Internal.Win32FilepathParser.PrepareScanner(src);
 
 			Assert.IsTrue(DosDevice.TryParse(scan, out var prefix));
 			Assert.AreEqual(@"Volume{xxx-xxx-xxx}", prefix!.Volume);
@@ -356,7 +356,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_PrefixJustUnc_1()
 		{
 			var src = @"\\server\C$";
-			var scan = new FilepathScanner(src);
+			var scan = Internal.Win32FilepathParser.PrepareScanner(src);
 
 			Assert.IsTrue(Unc.TryParse(scan, out var prefix));
 			Assert.AreEqual("server", prefix!.Server);
@@ -368,7 +368,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_PrefixJustUnc_2()
 		{
 			var src = @"\\server\share-name\dir\file.txt";
-			var scan = new FilepathScanner(src);
+			var scan = Internal.Win32FilepathParser.PrepareScanner(src);
 
 			Assert.IsTrue(Unc.TryParse(scan, out var prefix));
 			Assert.AreEqual("server", prefix!.Server);
@@ -380,7 +380,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_PrefixTraditionalDos()
 		{
 			var src = @"c:\";
-			var scan = new FilepathScanner(src);
+			var scan = Internal.Win32FilepathParser.PrepareScanner(src);
 
 			Assert.IsTrue(Dos.TryParse(scan, out var prefix));
 			Assert.AreEqual("c:", prefix!.Drive);
