@@ -15,7 +15,7 @@ Local Files and Directories Utility (Path descriptor, Directory tree walker, etc
 I'm not sure yet that this is a library worth publishing on nuget.
 
 Download:
-- [v1.0.0-beta.20210817](https://github.com/tkuri2010/Fsuty/releases/tag/v1.0.0-beta.20210817)
+- [v1.0.0-beta.20210819](https://github.com/tkuri2010/Fsuty/releases/tag/v1.0.0-beta.20210819)
 
 ### How to use downloaded `*.nupkg`
 
