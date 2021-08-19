@@ -16,6 +16,14 @@ namespace Tkuri2010.Fsuty
 	/// <summary>file path parser</summary>
 	public interface IFilepathParser
 	{
+		/// <summary>Unix style file path parser. You can set this to Filepath.CurrentParser property.</summary>
+		public static IFilepathParser Unix => Internal.UnixFilepathParser.Instance;
+
+
+		/// <summary>Win32 style file path parser. You can set this to Filepath.CurrentParser property.</summary>
+		public static IFilepathParser Win32 => Internal.Win32FilepathParser.Instance;
+
+
 		Filepath Parse(string? path);
 	}
 
@@ -147,27 +155,27 @@ namespace Tkuri2010.Fsuty
 	/// <summary>File path descriptor</summary>
     public class Filepath
     {
-		private static IFilepathParser? mCurrentFilepathParser = null;
+		private static IFilepathParser? mCurrentParser = null;
 
 
 		/// <summary>
-		/// Get or set IFilepathParser. Default = prepared instance that matches from the system (unix or win32)
+		/// Get or set IFilepathParser. Default = prepared instance that matches to the system (unix or win32)
 		/// </summary>
 		/// <value></value>
-		public static IFilepathParser CurrentFilepathParser
+		public static IFilepathParser CurrentParser
 		{
 			get
 			{
-				if (mCurrentFilepathParser is null)
+				if (mCurrentParser is null)
 				{
-					mCurrentFilepathParser = Internal.FilepathParsingHelper.GetSystemDefaultFilepathParser();
+					mCurrentParser = Internal.FilepathParsingHelper.GetSystemDefaultFilepathParser();
 				}
-				return mCurrentFilepathParser;
+				return mCurrentParser;
 			}
 
 			set
 			{
-				mCurrentFilepathParser = value;
+				mCurrentParser = value;
 			}
 		}
 
@@ -176,7 +184,7 @@ namespace Tkuri2010.Fsuty
 		/// empty Filepath object
 		/// </summary>
 		/// <returns></returns>
-		public static readonly Filepath Empty = new Filepath();
+		public static readonly Filepath Empty = new();
 
 
 		/// <summary>
@@ -206,7 +214,7 @@ namespace Tkuri2010.Fsuty
 		/// </summary>
 		/// <param name="path">path string</param>
 		/// <returns></returns>
-		public static Filepath Parse(string? path) => CurrentFilepathParser.Parse(path);
+		public static Filepath Parse(string? path) => CurrentParser.Parse(path);
 
 
 		/// <summary>
@@ -942,11 +950,11 @@ namespace Tkuri2010.Fsuty.Internal
 		{
 			if (SeemsUnixFileSystem)
 			{
-				return new UnixFilepathParser();
+				return UnixFilepathParser.Instance;
 			}
 			else
 			{
-				return new Win32FilepathParser();
+				return Win32FilepathParser.Instance;
 			}
 		}
 
@@ -1006,6 +1014,9 @@ namespace Tkuri2010.Fsuty.Internal
 
 	public class UnixFilepathParser : IFilepathParser
 	{
+		public static readonly UnixFilepathParser Instance = new();
+
+
 		public Filepath Parse(string? path)
 		{
 			if (string.IsNullOrEmpty(path))
@@ -1026,6 +1037,9 @@ namespace Tkuri2010.Fsuty.Internal
 
 	public class Win32FilepathParser : IFilepathParser
 	{
+		public static readonly Win32FilepathParser Instance = new();
+
+
 		public Filepath Parse(string? path)
 		{
 			if (string.IsNullOrEmpty(path))
