@@ -27,13 +27,13 @@ Your project's structure:
     +    `--  Tkuri2010.Fsuty.1.0.0-foobar.nupkg     <-- where you downloded
     `-- src/
          +-- YourProject/
-	 +    +-- Nuget.Config          <-- Add this file
-	 +    +-- YourProject.csproj    <-- And edit your project file
-	 +    +-- ...
-	 `-- TestOfYourProject/
-	      +-- Nuget.Config
-	      +-- TestOfYourProject.csproj
-	      +-- ...
+         +    +-- Nuget.Config          <-- Add this file
+         +    +-- YourProject.csproj    <-- And edit your project file
+         +    +-- ...
+         `-- TestOfYourProject/
+              +-- Nuget.Config
+              +-- TestOfYourProject.csproj
+              +-- ...
 ```
 
 `Nuget.Config` file is as...
@@ -192,7 +192,7 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 		// for example, we want to collect 100 files.
 		var first100Files = new List<Filepath>();
 
-		await foreach (var item in Fsentry.VisitAsync(baseDir, ct))
+		await foreach (var item in Fsentry.EnumerateAsync(baseDir, ct))
 		{
 
 			// ex)
@@ -200,22 +200,22 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 			//   item.FullPathString  =>  "F:\our\works\dir\more_dir\file.txt" (string)
 			//   item.RelativePath    =>               "dir\more_dir\file.txt" (Filepath object)
 
-			if (item.Event == FsentryEvent.EnterDir)
+			if (item.Event == Fsevent.EnterDir)
 			{
 				// we can skip walking on the specified directory.
 				if (item.FullPathString.EndsWith(".git"))
 				{
-					item.Command = FsentryCommand.SkipDirectory;
+					item.Command = Fscommand.SkipDirectory;
 					continue;
 				}
 
 				Console.WriteLine($"Enter Dir: {item.FullPathString}");
 			}
-			else if (item.Event == FsentryEvent.LeaveDir)
+			else if (item.Event == Fsevent.LeaveDir)
 			{
 				Console.WriteLine($"Leave Dir: {item.FullPathString}");
 			}
-			else // if (item.Event == FsentryEvent.File)
+			else if (item.Event == Fsevent.File)
 			{
 				first100Files.Add(item.RelativePath);
 				if (100 <= first100Files.Count)
@@ -223,12 +223,48 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 					break;
 				}
 			}
+			else if (item.Event == Fsevent.Error)
+			{
+				// error...
+			}
 		}
 
 		/* ... and more works ... */
 	}
 ```
 
+
+## (Experimental) class `Fsinfo` (namespace `Tkuri2010.Fsuty`)
+
+***!!! Unstable yet !!!***
+
+Enumerates file system entries, as `DirectoryInfo` or `FileInfo`.
+
+```cs
+async Task DoMyWorkAsync(Filepath baseDir, [EnumeratorCancellation] CancellationToken ct = default)
+{
+	await foreach (var item in Fsinfo.EnumerateAsync(baseDir, ct))
+	{
+		if (item.WhenEnterDir(out var enterDirInfo))
+		{
+			// dirInfo is a `System.IO.DirectoryInfo` here.
+			// do something...
+		}
+		else if (item.WhenLeaveDir(out var leaveDirInfo))
+		{
+			// do something...
+		}
+		else if (item.WhenFile(out var fileInfo))
+		{
+			// fileInfo is a `System.IO.FileInfo` here.
+		}
+		else if (item.WhenError(out var exception, out var currentDirInfo))
+		{
+			// error...
+		}
+	}
+}
+```
 
 ## (side-product) class `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
 
