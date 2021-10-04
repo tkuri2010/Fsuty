@@ -87,7 +87,7 @@ https://github.com/dotnet/roslyn/issues/45510#issuecomment-725091019
 ### 次のようなコードでおよそ 8.5 万ファイルを列挙
 ```cs
 	var all = new List();
-	await foreach (var e in Fsentry.VisitAsync(@"D:\there"))
+	await foreach (var e in Fsentry.EnumerateAsync(@"D:\there"))
 	{
 		Console.WriteLine(e.RelativePath);  // 全て文字列化する
 		all.Add(e.RelativePath);
@@ -98,7 +98,7 @@ https://github.com/dotnet/roslyn/issues/45510#issuecomment-725091019
 |                      | `GC.GetTotalAllocatedBytes` | `GC.GetAllocatedBytesForCurrentThread` | 経過時間 |
 | -                    | -                           | -                                      | -        |
 | `ReadOnlyCollection` | 159Mb                       | 157Mb                                  | 1.7秒 |
-| `LinkedCollection`   | 143Mb (better)              | 141Mb (better)                         | ~~4.3秒~~ 1.7秒    |
+| `LinkedCollection`   | ~~143Mb~~ 137Mb (better)    | ~~141Mb~~ 135Mb (better)               | ~~4.3秒~~ 1.7秒    |
 
 `LinkedCollection` は 10% ほどメモリの使用を抑えられるが、イテレーションが遅いので文字列化に時間がかかる。
 
@@ -106,11 +106,13 @@ https://github.com/dotnet/roslyn/issues/45510#issuecomment-725091019
 
 ちなみに `LinkedCollection` では列挙をなるべく高速にしたいので「曾祖父」世代の参照を保持しておく事にしているが、この機能を切っても速度は遜色無かった。メモリは機能を有効にした場合に比べて数%だけ抑えられた。
 
+※ (2021/9/24) アイテムの列挙時、なぜか entry が持っている RelativePath と同じものをローカルのロジックで作り直していたというバグを修正して再計測。メモリの使用量がもう少し抑えられたらしい。
+
 ### 文字列化をやめるとどうなるか？
 
 ```cs
 	var all = new List();
-	await foreach (var e in Fsentry.VisitAsync(@"there"))
+	await foreach (var e in Fsentry.EnumerateAsync(@"there"))
 	{
 		// Console.WriteLine(e.RelativePath);  // やめる
 		all.Add(e.RelativePath);
