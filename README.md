@@ -16,7 +16,7 @@ I'm not sure yet that this is a library worth publishing on nuget.
 
 Download the `Fsuty.v***.nupkg` file from [Releases page](https://github.com/tkuri2010/Fsuty/releases).
 
-### How to use downloaded `*.nupkg`
+### How to use a `*.nupkg` you downloaded
 
 I'm not sure but this is what I tried. Looks work. (Is there any official documentation? I could not find out yet..)
 
@@ -27,16 +27,16 @@ Your project's structure:
     +    `--  Tkuri2010.Fsuty.1.0.0-foobar.nupkg     <-- where you downloded
     `-- src/
          +-- YourProject/
-	 +    +-- Nuget.Config          <-- Add this file
-	 +    +-- YourProject.csproj    <-- And edit your project file
-	 +    +-- ...
-	 `-- TestOfYourProject/
-	      +-- Nuget.Config
-	      +-- TestOfYourProject.csproj
-	      +-- ...
+         +    +-- nuget.config          <-- Add this file
+         +    +-- YourProject.csproj    <-- And edit your project file
+         +    +-- ...
+         `-- TestOfYourProject/
+              +-- nuget.config
+              +-- TestOfYourProject.csproj
+              +-- ...
 ```
 
-`Nuget.Config` file is as...
+`nuget.config` file is as...
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -60,7 +60,7 @@ Edit `*.csproj` file...
 ```
 
 
-## How to get the `*.nupkg`
+## How to build this project and get the `Tkuri2010.Fsuty.***.nupkg`
 
 ```ps
 PS> cd src\Tkuri2010.Fsuty
@@ -72,114 +72,33 @@ PS> dotnet pack -c Release
 
 File path parser / descriptor.
 ```cs
-	var path = Filepath.Parse(@"C:\dir1\dir2\file.dat");
+    var path = Filepath.Parse(@"C:\dir1\dir2\file.dat");
 
-	var another = Filepath.Parse("more/another_file.dat");
+    Console.WriteLine( path.ToString() );
+        //=> C:\dir1\dir2\file.dat
+    Console.WriteLine( path.IsAbsolute );
+        //=> true
+    Console.WriteLine( path.Items[0] );
+        //=> dir1
+    Console.WriteLine( path.Items[1] );
+        //=> dir2
+    Console.WriteLine( path.LastItem );
+        //=> file.dat
+    Console.WriteLine( path.Extension );
+        //=> .dat
 
-	var combined = path.Parent.Combine(another.Items);
-		//=> C:\dir1\dir2\more\another_file.dat
+    var parent = path.Parent;
+        //=~ C:\dir1\dir2
 
-	Console.WriteLine(combined.IsAbsolute);
-		//=> true
-	Console.WriteLine(combined.Items[0]);
-		//=> dir1
-	Console.WriteLine(combined.Items[1]);
-		//=> dir2
-	Console.WriteLine(combined.LastItem);
-		//=> another_file.dat
-	Console.WriteLine(combined.Extension);
-		//=> .dat
+    var another = Filepath.Parse("more/another_file.dat");
+
+    Console.WriteLine( another.IsAbsolute );
+        //=> false
+
+    var combined = parent.Combine(another.Items);
+        //=> C:\dir1\dir2\more\another_file.dat
 ```
-
-more formats are supported:
-```cs
-	var unix = Filepath.Parse("/home/tkuri2010/dir/file.txt");
-	if (unix.Prefix is PathPrefix.None none)
-	{
-		Console.WriteLine("UNIX path doesn't have prefix.");
-	}
-
-	var dosDevice  = Filepath.Parse(@"\\.\Volume{cafebabe-cafebabe}\dir\file.txt");
-	var dosDevice2 = Filepath.Parse(@"//./Volume{cafebabe-cafebabe}/dir/file.txt"); // forward slashes are ok!
-	if (dosDevice.Prefix is PathPrefix.DosDevice dosDevicePrefix)
-	{
-		Console.WriteLine(dosDevicePrefix.Volume);
-			//=> Volume{cafebabe-cafebabe}
-	}
-
-	var dosDeviceWithDrive = Filepath.Parse(@"\\.\C:\dir\file.txt");
-	if (dosDeviceWithDrice.Prefix is PathPrefix.DosDeviceDrive dosDeviceDrivePrefix)
-	{
-		Console.WriteLine(dosDeviceDrivePrefix.DriveLetter);
-			//=> C
-	}
-
-	var dosDeviceUnc = Filepath.Parse(@"\\.\UNC\192.168.11.15\share-name\dir\file.txt");
-	if (dosDeviceUnc.Prefix is PathPrefix.DosDeviceUnc dosDeviceUncPrefix)
-	{
-		Console.WriteLine(dosDeviceUncPrefix.Server);
-			//=> 192.168.11.15
-		Console.WriteLine(dosDeviceUncPrefix.Share);
-			//=> share-name
-	}
-
-	var unc = Filepath.Parse(@"\\server\share-name\dir\file.txt");
-	if (unc.Prefix is PathPrefix.Unc uncPrefix)
-	{
-		Console.WriteLine(uncPrefix.Server);
-		Console.WriteLine(uncPrefix.Share);
-	}
-
-	var traditionalDos = Filepath.Parse(@"c:\dir\file.txt");
-	if (traditionalDos.Prefix is PathPrefix.Dos dosPrefix)
-	{
-		Console.WriteLine(dosPrefix.DriveLetter);
-	}
-```
-
-
-### `Combine()` -- Why don't we have convenient `Combine(Filepath)` nor `Combine(string)` methods?
-
-We have only `Combine(PathItems)` method.
-```cs
-	var path = Filepath.Parse("/home/tkuri2010/dir");
-
-	// We can:
-	var rel = Filepath.Parse("more/file.txt");
-	var ok = path.Combine(rel.Items);
-		//=> /home/tkuri2010/dir/more/file.txt
-
-	// We cannot:
-	var x1 = path.Combine(rel);
-	var x2 = path.Combine(Filepath.Parse("more/file.txt"));
-	var x3 = path.Combine("more/file.txt");
-```
-
-Why?
-
-Consider this:
-
-```cs
-	var abs = Filepath.Parse("/opt/some-tmp");
-
-	var xxx = abs.Combine("/root");  //=> ... ???
-```
-Where does the `xxx` object point do you expect? `"/opt/some-tmp/root"`? or `"/root"`? I don't want to be confused by this design.
-
-I have no plans to provide `Combine(Filepath)` nor `Combine(string)` methods. We should remember that the `Combine(PathItems)` method takes a __RELATIVE path-items-object only__.
-
-But you can:
-```cs
-	PathItems heh(string path)
-	{
-		return Filepath.Parse(path).Items;
-	}
-
-	var abs = Filepath.Parse("/opt/some-tmp");
-
-	var xxx = abs.Combine(heh("/root"));
-```
-at your own risk.
+→ more details: [\[./doc/class_filepath.md\]](./doc/class_filepath.md)
 
 
 ## class `Fsentry` (namespace `Tkuri2010.Fsuty`)
@@ -192,7 +111,7 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 		// for example, we want to collect 100 files.
 		var first100Files = new List<Filepath>();
 
-		await foreach (var item in Fsentry.VisitAsync(baseDir, ct))
+		await foreach (var item in Fsentry.EnumerateAsync(baseDir, ct))
 		{
 
 			// ex)
@@ -200,22 +119,22 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 			//   item.FullPathString  =>  "F:\our\works\dir\more_dir\file.txt" (string)
 			//   item.RelativePath    =>               "dir\more_dir\file.txt" (Filepath object)
 
-			if (item.Event == FsentryEvent.EnterDir)
+			if (item.Event == Fsevent.EnterDir)
 			{
 				// we can skip walking on the specified directory.
 				if (item.FullPathString.EndsWith(".git"))
 				{
-					item.Command = FsentryCommand.SkipDirectory;
+					item.Command = Fscommand.SkipDirectory;
 					continue;
 				}
 
 				Console.WriteLine($"Enter Dir: {item.FullPathString}");
 			}
-			else if (item.Event == FsentryEvent.LeaveDir)
+			else if (item.Event == Fsevent.LeaveDir)
 			{
 				Console.WriteLine($"Leave Dir: {item.FullPathString}");
 			}
-			else // if (item.Event == FsentryEvent.File)
+			else if (item.Event == Fsevent.File)
 			{
 				first100Files.Add(item.RelativePath);
 				if (100 <= first100Files.Count)
@@ -223,12 +142,48 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 					break;
 				}
 			}
+			else if (item.Event == Fsevent.Error)
+			{
+				// error...
+			}
 		}
 
 		/* ... and more works ... */
 	}
 ```
 
+
+## (Experimental) class `Fsinfo` (namespace `Tkuri2010.Fsuty`)
+
+***!!! Unstable yet !!!***
+
+Enumerates file system entries, as `DirectoryInfo` or `FileInfo`.
+
+```cs
+async Task DoMyWorkAsync(Filepath baseDir, [EnumeratorCancellation] CancellationToken ct = default)
+{
+	await foreach (var item in Fsinfo.EnumerateAsync(baseDir, ct))
+	{
+		if (item.WhenEnterDir(out DirectoryInfo enterDirInfo))
+		{
+			// dirInfo is a `System.IO.DirectoryInfo` here.
+			// do something...
+		}
+		else if (item.WhenLeaveDir(out DirectoryInfo leaveDirInfo))
+		{
+			// do something...
+		}
+		else if (item.WhenFile(out FileInfo fileInfo))
+		{
+			// fileInfo is a `System.IO.FileInfo` here.
+		}
+		else if (item.WhenError(out Exception exception, out DirectoryInfo currentDirInfo))
+		{
+			// error...
+		}
+	}
+}
+```
 
 ## (side-product) class `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
 

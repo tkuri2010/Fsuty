@@ -13,7 +13,8 @@ namespace Tkuri2010.Fsuty.Xmp
         static void Main(string[] args)
         {
 			//Xmp1(args);
-			Xmp3().GetAwaiter().GetResult();
+			//Xmp3().GetAwaiter().GetResult();
+			Xmp4().GetAwaiter().GetResult();
 			//Text.Std.LinesProcessorXmp1Grep.TryUseMemMapFileViewStream();
 			//Try_Path_Combine();
         }
@@ -49,9 +50,9 @@ namespace Tkuri2010.Fsuty.Xmp
 			// you can use CancellationToken so that the app user can request cancel on UI.
 			CancellationToken ct = CancellationToken.None;
 
-			await foreach (var e in Fsentry.VisitAsync("../.", ct))
+			await foreach (var e in Fsentry.EnumerateAsync("../.", ct))
 			{
-				if (e.Event == FsentryEvent.EnterDir)
+				if (e.Event == Fsevent.EnterDir)
 				{
 					Console.WriteLine($"ENTER: {e.FullPathString}");
 
@@ -63,13 +64,17 @@ namespace Tkuri2010.Fsuty.Xmp
 					//     continue;
 					// }
 				}
-				else if (e.Event == FsentryEvent.File)
+				else if (e.Event == Fsevent.File)
 				{
 					Console.WriteLine($"FILE : {e.FullPathString}");
 				}
-				else if (e.Event == FsentryEvent.LeaveDir)
+				else if (e.Event == Fsevent.LeaveDir)
 				{
 					Console.WriteLine($"LEAVE: {e.FullPathString}");
+				}
+				else if (e.Event == Fsevent.Error)
+				{
+					Console.WriteLine($"ERROR: {e.FullPathString}");
 				}
 			}
 		}
@@ -83,9 +88,9 @@ namespace Tkuri2010.Fsuty.Xmp
 
 			sw.Start();
 
-			await foreach (var e in Fsentry.VisitAsync(@"D:\somewhere", ct))
+			await foreach (var e in Fsentry.EnumerateAsync(@"D:\somewhere", ct))
 			{
-				if (e.Event == FsentryEvent.EnterDir || e.Event == FsentryEvent.File)
+				if (e.Event == Fsevent.EnterDir || e.Event == Fsevent.File)
 				{
 					Console.WriteLine(e.RelativePath);
 					all.Add(e.RelativePath);
@@ -99,6 +104,34 @@ namespace Tkuri2010.Fsuty.Xmp
 			Console.WriteLine("GetAllocatedBytesForCurrentThread: " + System.GC.GetAllocatedBytesForCurrentThread());
 			Console.WriteLine("            Elapsed              : " + sw.Elapsed);
 		}
+
+
+		/// <summary>
+		/// example usage of the Fsinfo class.
+		/// </summary>
+		static async Task Xmp4()
+		{
+			await foreach (var e in Fsinfo.EnumerateAsync(@"C:/Windows/Logs"))
+			{
+				if (e.WhenError(out var x, out var currentDirInfo))
+				{
+					Console.WriteLine($"! {x.Message} : {currentDirInfo.FullName}");
+				}
+				else if (e.WhenEnterDir(out var enterDirInfo))
+				{
+					Console.WriteLine($">> {enterDirInfo.FullName}");
+				}
+				else if (e.WhenLeaveDir(out var leaveDirInfo))
+				{
+					Console.WriteLine($"<< {leaveDirInfo.FullName}");
+				}
+				else if (e.WhenFile(out var fileInfo))
+				{
+					Console.WriteLine($"  {fileInfo.FullName}");
+				}
+			}
+		}
+
 
 #if false
 		[DllImport("shlwapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
