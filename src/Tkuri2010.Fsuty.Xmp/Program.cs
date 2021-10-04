@@ -106,6 +106,9 @@ namespace Tkuri2010.Fsuty.Xmp
 		}
 
 
+		/// <summary>
+		/// example usage of the Fsinfo class.
+		/// </summary>
 		static async Task Xmp4()
 		{
 			await foreach (var e in Fsinfo.EnumerateAsync(@"C:/Windows/Logs"))
