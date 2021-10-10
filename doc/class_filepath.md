@@ -77,8 +77,8 @@ Well known simple MS-DOS/Windows style paths: __Note that forward slashes are al
 |-                    |-            |-              |-        |-     |
 | `C:`                | `"C:"`      | `false`       | (empty) | Traditional DOS style, but a drive letter only. |
 | `C:\dir\item`       | `"C:"`      | `true`        | `"dir"` and `"item"` | |
-| `C:/dir/item`       | `"C:"`      | `true`        | `"dir"` and `"item"` | Forward slashes allowd !! |
-| `C:dir\item`        | `"C:"`      | `false`       | `"dir"` and `"item"` | Drive spec and a relative path. Did you know this format? |
+| `C:/dir/item`       | `"C:"`      | `true`        | `"dir"` and `"item"` | Forward slashes allowed!! |
+| `C:dir\item`        | `"C:"`      | `false`       | `"dir"` and `"item"` | Drive spec and a relative path. Did you know such a format? |
 
 
 ### Dos device path
@@ -169,9 +169,31 @@ Defaultly, if `System.IO.Path.DirectorySeparatorChar` or `System.IO.Path.AltDire
 
 You can switch this behavior by setting the `Filepath.CurrentParser` static prpoerty. See below.
 
--------------------------------------------------------------------
 
+-------------------------------------------------------------------
+## enum `Filepath.Style`
+- `_Unknown` - could not detect.
+- `Unix` - means Unix style path
+- `Win32` - means MS-DOS/Windows style path
+
+-------------------------------------------------------------------
 ## class `Filepath` static properties
+
+### `statkc Filepath.Style DefaultStyle`
+#### Description
+System default value, `Style.Unix` or `Style.Win32`
+
+### `static IFilepathParser DefaultParser`
+#### Description
+Gets the system default Filepath parser instance.
+
+### `static IFilepathParser UnixParser`
+#### Description
+Gets the Unix style file path parser instance.
+
+### `static IFilepathParser Win32Parser`
+#### Description
+Gets the MS-DOS/Windows style file path parser instance.
 
 ### `static IFilepathParser CurrentParser`
 #### Description
@@ -180,11 +202,14 @@ Gets or sets a path string parser implementation.
 Detects from dotnet runtime's state.
 #### Example
 ```cs
+    // system default
+    Filepath.CurrentParser = Filepath.DefaultParser;
+
     // Unix
-    Filepath.CurrentParser = Internal.UnixFilepathParser.Instance;
+    Filepath.CurrentParser = Filepath.UnixParser;
 
     // Win32
-    Filepath.CurrentParser = Internal.Win32FilepathParser.Instance;
+    Filepath.CurrentParser = Filepath.Win32Parser;
 ```
 
 ### `static readonly Filepath Empty`
@@ -200,7 +225,7 @@ Represents empty `Filepath` instance. It has no path prefix, means relative path
 #### Parameters
 - `path` - the source path string
 #### Returns
-- a `Filepath` instance.
+New `Filepath` instance.
 #### Description
 Parses the path string.
 #### Excample
@@ -213,7 +238,7 @@ Parses the path string.
 
 ### `IPathPrefix Prefix`
 #### Description
-Represents a prefix part of MS-DOS/Windows style path. For instance, A drive letter, or a shared folder's server name and share name, and so on.
+Represents a prefix part of MS-DOS/Windows style path. For instance, a drive letter, or a shared folder's server name and share name, and so on.
 
 See [\[class_pathprefix.md\]](./class_pathprefix.md) for more detail.
 

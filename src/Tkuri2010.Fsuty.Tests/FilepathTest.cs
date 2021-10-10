@@ -185,7 +185,7 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.AreEqual(string.Empty, path.LastItemWithoutExtension);
 			}
 
-			if (Internal.FilepathParsingHelper.SeemsWin32FileSystem)
+			if (Internal.FilepathParsingHelper.SeemsWin32Style)
 			{
 				var path = Filepath.Parse("c:/dir/.git");
 				Assert.AreEqual(string.Empty, path.LastItemWithoutExtension);
