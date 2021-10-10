@@ -155,20 +155,43 @@ namespace Tkuri2010.Fsuty
 	/// <summary>File path descriptor</summary>
     public class Filepath
     {
+		public enum Style
+		{
+			_Unknown,
+			Unix,
+			Win32,
+		}
+
+
+		/// <summary>System default value, `Style.Unix` or `Style.Win32`</summary>
+		public static Style DefaultStyle => Internal.FilepathParsingHelper.DetectFileSystemStyle();
+
+
+		/// <summary>Gets the system default Filepath parser instance.</summary>
+		public static IFilepathParser DefaultParser => Internal.FilepathParsingHelper.GetDefaultFilepathParser();
+
+
+		/// <summary>Gets the Unix style file path parser instance.</summary>
+		public static IFilepathParser UnixParser => Internal.UnixFilepathParser.Instance;
+
+
+		/// <summary>Gets the MS-DOS/Windows style file path parser instance.</summary>
+		public static IFilepathParser Win32Parser => Internal.Win32FilepathParser.Instance;
+
+
 		private static IFilepathParser? mCurrentParser = null;
 
 
 		/// <summary>
 		/// Get or set IFilepathParser. Default = prepared instance that matches to the system (unix or win32)
 		/// </summary>
-		/// <value></value>
 		public static IFilepathParser CurrentParser
 		{
 			get
 			{
 				if (mCurrentParser is null)
 				{
-					mCurrentParser = Internal.FilepathParsingHelper.GetSystemDefaultFilepathParser();
+					mCurrentParser = Internal.FilepathParsingHelper.GetDefaultFilepathParser();
 				}
 				return mCurrentParser;
 			}
@@ -245,7 +268,7 @@ namespace Tkuri2010.Fsuty
 		public bool HasExtension
 				=> Items.Count <= 0
 					? false
-					: System.IO.Path.HasExtension(_LastItem);
+					: global::System.IO.Path.HasExtension(_LastItem);
 
 		/// <summary>
 		/// System.IO.Path.GetExtension()に準じる。拡張子が無い場合はstring.Emptyを返す
@@ -253,7 +276,7 @@ namespace Tkuri2010.Fsuty
 		public string Extension
 				=> Items.Count <= 0
 					? string.Empty
-					: System.IO.Path.GetExtension(_LastItem);
+					: global::System.IO.Path.GetExtension(_LastItem);
 
 
 		/// <summary>
@@ -265,7 +288,7 @@ namespace Tkuri2010.Fsuty
 		public string LastItemWithoutExtension
 				=> Items.Count == 0
 					? string.Empty
-					: System.IO.Path.GetFileNameWithoutExtension(_LastItem);
+					: global::System.IO.Path.GetFileNameWithoutExtension(_LastItem);
 
 
 		internal Filepath()
@@ -280,7 +303,7 @@ namespace Tkuri2010.Fsuty
 		{
 			if (mStringCache == null)
 			{
-				mStringCache = ToString(System.IO.Path.DirectorySeparatorChar);
+				mStringCache = ToString(global::System.IO.Path.DirectorySeparatorChar);
 			}
 			return mStringCache;
 		}
@@ -898,57 +921,49 @@ namespace Tkuri2010.Fsuty.Internal
 
 	public static class FilepathParsingHelper
 	{
-		public enum FileSystemSeems
-		{
-			_Unknown,
-			Unix,
-			Win32,
-		}
-
-
-		public static FileSystemSeems DetectFileSystem()
+		public static Filepath.Style DetectFileSystemStyle()
 		{
 			var c1 = System.IO.Path.DirectorySeparatorChar;
 			var c2 = System.IO.Path.AltDirectorySeparatorChar;
 			var v = System.IO.Path.VolumeSeparatorChar;
 			if (c1 == '/' && c2 == '/' && v == '/')
 			{
-				return FileSystemSeems.Unix;
+				return Filepath.Style.Unix;
 			}
 
 			if (((c1 == '/' && c2 == '\\') || (c1 == '\\' && c2 == '/'))
 				&& v == ':')
 			{
-				return FileSystemSeems.Win32;
+				return Filepath.Style.Win32;
 			}
 
-			return FileSystemSeems._Unknown;
+			return Filepath.Style._Unknown;
 		}
 
 
-		private static FileSystemSeems _detectedFileSystem = FileSystemSeems._Unknown;
+		private static Filepath.Style _detectedFileSystemStyle = Filepath.Style._Unknown;
 
 
-		private static FileSystemSeems _DetectAndCacheFileSystem()
+		private static Filepath.Style _DetectAndCacheFileSystemStyle()
 		{
-			if (_detectedFileSystem == FileSystemSeems._Unknown)
+			if (_detectedFileSystemStyle == Filepath.Style._Unknown)
 			{
-				_detectedFileSystem = DetectFileSystem();
+				_detectedFileSystemStyle = DetectFileSystemStyle();
 			}
 
-			return _detectedFileSystem;
+			return _detectedFileSystemStyle;
 		}
 
 
-		public static bool SeemsUnixFileSystem => _DetectAndCacheFileSystem() == FileSystemSeems.Unix;
+		public static bool SeemsUnixStyle => _DetectAndCacheFileSystemStyle() == Filepath.Style.Unix;
 
 
-		public static bool SeemsWin32FileSystem => _DetectAndCacheFileSystem() == FileSystemSeems.Win32;
+		public static bool SeemsWin32Style => _DetectAndCacheFileSystemStyle() == Filepath.Style.Win32;
 
 
-		public static IFilepathParser GetSystemDefaultFilepathParser()
+		public static IFilepathParser GetDefaultFilepathParser()
 		{
-			if (SeemsUnixFileSystem)
+			if (SeemsUnixStyle)
 			{
 				return UnixFilepathParser.Instance;
 			}
