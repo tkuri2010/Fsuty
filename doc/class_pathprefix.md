@@ -4,6 +4,8 @@ I know this markdown document is hard to read. Is there any better documentation
 
 The `Filepath` class has `Prefix` property. This means drive letter, or server and share name on MS-DOS/Windows style paths.
 
+Refer: https://docs.microsoft.com/en-us/dotnet/standard/io/file-path-formats
+
 ## class `None`
 This means the path has no prefix.
 
@@ -114,3 +116,25 @@ Represents a usual(traditional) MS-DOS/Windows style path.
 ```
 ### Derived from
 - interface `IHasDrive`
+
+
+
+## class `Unc`
+Represents a UNC path.
+```
+    \\server-name\share-name\dir\item
+      ^^^^^^^^^^^ ^^^^^^^^^^
+        `Server`   `Share`
+      `--------------------'
+        `Volume` property
+
+    \\server-name\C$\dir\item
+      ^^^^^^^^^^^ ^^
+        `Server`  `Share`
+      `------------'
+        `Volume` property
+    Note: at this pattern, "C$" is actually a drive,
+          althourh the propety name is `Share`.
+```
+### Derived from
+- interface `IShared`

@@ -7,6 +7,8 @@ Local Files and Directories Utility (Path descriptor, Directory tree walker, etc
 	- File path parser / descriptor
 - `Fsentry` (namespace `Tkuri2010.Fsuty`)
 	- Files and directories enumeration utility.
+- `Fsinfo` (namespace `Tkuri2010.Fsuty`) (experimental!)
+    - `System.IO.FileInfo` and `DirectoryInfo` enumeration utility.
 - (side-product) `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
 	- Unique formed collection class.
 
@@ -14,7 +16,7 @@ Local Files and Directories Utility (Path descriptor, Directory tree walker, etc
 
 I'm not sure yet that this is a library worth publishing on nuget.
 
-Download the `Fsuty.v***.nupkg` file from [Releases page](https://github.com/tkuri2010/Fsuty/releases).
+Download the `Tkuri2010.Fsuty.***.nupkg` file from [Releases page](https://github.com/tkuri2010/Fsuty/releases).
 
 ### How to use a `*.nupkg` you downloaded
 
