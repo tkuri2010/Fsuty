@@ -1,23 +1,129 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Tkuri2010.Fsuty
 {
-
+	/// <summary>
+	/// enumerates DirectoryInfo or FileInfo.
+	/// </summary>
 	public class Fsinfo
 	{
+		public interface IInfo
+		{
+			FseventInternalReaction Reaction { get; }
+
+			void LeaveParentDir();
+		}
+
+
+		public interface ISuccess : IInfo
+		{
+		}
+
+
+		public class EnterDir : ISuccess
+		{
+			public DirectoryInfo Info { get; private set; }
+
+			public FseventInternalReaction Reaction { get; private set; } = FseventInternalReaction.Advance;
+
+			public EnterDir(DirectoryInfo info)
+			{
+				Info = info;
+			}
+
+			public void LeaveParentDir()
+			{
+				Reaction = FseventInternalReaction.EscapeParentDir;
+			}
+
+
+			public void Skip()
+			{
+				Reaction = FseventInternalReaction.SkipEnterDir;
+			}
+		}
+
+
+		public class LeaveDir : ISuccess
+		{
+			public DirectoryInfo Info { get; private set; }
+
+			public FseventInternalReaction Reaction { get; private set; } = FseventInternalReaction.Advance;
+
+			public LeaveDir(EnterDir enterDir)
+			{
+				Info = enterDir.Info;
+			}
+
+			public void LeaveParentDir()
+			{
+				Reaction = FseventInternalReaction.EscapeParentDir;
+			}
+		}
+
+
+		public class File : ISuccess
+		{
+			public FileInfo Info { get; private set; }
+
+			public FseventInternalReaction Reaction { get; private set; } = FseventInternalReaction.Advance;
+
+			public File(FileInfo info)
+			{
+				Info = info;
+			}
+
+			public void LeaveParentDir()
+			{
+				Reaction = FseventInternalReaction.EscapeParentDir;
+			}
+		}
+
+
+		public class Error : IInfo
+		{
+			public Exception? Exception { get; private set; }
+
+			public FseventInternalReaction Reaction { get; private set; } = FseventInternalReaction.Advance;
+
+
+			public Error(Exception? exception)
+			{
+				Exception = exception;
+			}
+
+
+			public void LeaveParentDir()
+			{
+				Reaction = FseventInternalReaction.EscapeParentDir;
+			}
+		}
+
+
+		public class EnumerationException : Exception
+		{
+			public DirectoryInfo CurrentDirectoryInfo { get; private set; }
+
+
+			public EnumerationException(DirectoryInfo info, Exception innerException)
+				: base($"File info enumeration failed for dir {info.FullName}", innerException)
+			{
+				CurrentDirectoryInfo = info;
+			}
+		}
+
+
 		/// <summary>
 		/// enumerates all file system entries as DirectoryInfo or FileInfo, recursivery
 		/// </summary>
 		/// <param name="basePath"></param>
 		/// <param name="ct"></param>
 		/// <returns></returns>
-		public static IAsyncEnumerable<Fsinfo> EnumerateAsync(Filepath basePath, CancellationToken ct = default)
+		public static IAsyncEnumerable<IInfo> EnumerateAsync(Filepath basePath, CancellationToken ct = default)
 		{
 			return EnumerateAsync(basePath.ToString(), ct);
 		}
@@ -29,147 +135,96 @@ namespace Tkuri2010.Fsuty
 		/// <param name="basePath"></param>
 		/// <param name="ct"></param>
 		/// <returns></returns>
-		public static IAsyncEnumerable<Fsinfo> EnumerateAsync(string basePath, CancellationToken ct = default)
+		public static IAsyncEnumerable<IInfo> EnumerateAsync(string basePath, CancellationToken ct = default)
 		{
 			return EnumerateAsync(new DirectoryInfo(basePath), ct);
 		}
 
 
-		/// <summary>
-		/// enumerates all file system entries as DirectoryInfo or FileInfo, recursivery
-		/// </summary>
-		/// <param name="baseDirInfo"></param>
-		/// <param name="ct"></param>
-		/// <returns></returns>
-		public static async IAsyncEnumerable<Fsinfo> EnumerateAsync(DirectoryInfo baseDirInfo, [EnumeratorCancellation] CancellationToken ct = default)
+		public static async IAsyncEnumerable<IInfo> EnumerateAsync(DirectoryInfo baseDir, [EnumeratorCancellation] CancellationToken ct = default)
 		{
 			var y = new Detail.SimpleYielder();
 
-			var stack = new Stack<Fsinfo>();
-			stack.Push(new(baseDirInfo));
-			var isFirst = true;
+			var stack = new Stack<IInfo>();
 
-			var currDirInfo = baseDirInfo;
+			var currentDirInfo = baseDir;
 
-			while (1 <= stack.Count)
+			do
 			{
-				var e = stack.Pop();
-				if (isFirst)
-				{
-					isFirst = false;
-				}
-				else
-				{
-					yield return e;
-
-					if (! e.WhenEnterDir(out var dirInfo))
-					{
-						continue;
-					}
-					currDirInfo = dirInfo;
-
-					stack.Push(new Fsinfo(currDirInfo, asLeaving: true));
-
-					if (e.Command != Fscommand.Advance)
-					{
-						continue;
-					}
-				}
-
+				#region Fill-Stack
 				try
 				{
-					foreach (var fileInfo in currDirInfo.EnumerateFiles())
+					foreach (var fileInfo in currentDirInfo.EnumerateFiles())
 					{
-						if (y.Countup()) await y.YieldAsync();
+						if (y.Countup())
+						{
+							await y.YieldAsync();
+							ct.ThrowIfCancellationRequested();
+						}
 
-						stack.Push(new(fileInfo));
-
-						ct.ThrowIfCancellationRequested();
+						stack.Push(new File(fileInfo));
 					}
 
-					foreach (var dirInfo in currDirInfo.EnumerateDirectories())
+					foreach (var dirInfo in currentDirInfo.EnumerateDirectories())
 					{
-						if (y.Countup()) await y.YieldAsync();
+						if (y.Countup())
+						{
+							await y.YieldAsync();
+							ct.ThrowIfCancellationRequested();
+						}
 
-						stack.Push(new(dirInfo));
-
-						ct.ThrowIfCancellationRequested();
+						stack.Push(new EnterDir(dirInfo));
 					}
 				}
 				catch (Exception x)
 				{
-					stack.Push(new(x, currDirInfo));
+					stack.Push(new Error(new EnumerationException(currentDirInfo, x)));
+				}
+				#endregion
+
+				while (stack.TryPop(out var someInfo))
+				{
+					yield return someInfo;
+
+					if (someInfo.Reaction == FseventInternalReaction.EscapeParentDir)
+					{
+						#region  Leave-Parent-Dir
+						for (; ; )
+						{
+							if (! stack.TryPeek(out var e))
+							{
+								yield break;
+							}
+
+							if (e is LeaveDir)
+							{
+								break;
+							}
+							else
+							{
+								stack.Pop();
+							}
+						}
+						#endregion
+					}
+
+					if (someInfo.Reaction != FseventInternalReaction.Advance)
+					{
+						continue;
+					}
+
+					if (someInfo is not EnterDir enterDir)
+					{
+						continue;
+					}
+
+					stack.Push(new LeaveDir(enterDir));
+
+					currentDirInfo = enterDir.Info;
+					break;
 				}
 			}
-		}
-
-
-		public bool WhenEnterDir([NotNullWhen(true)] out DirectoryInfo? dirInfo)
-		{
-			dirInfo = (Event == Fsevent.EnterDir) ? mDirInfo : null;
-			return (dirInfo is not null);
-		}
-
-
-		public bool WhenLeaveDir([NotNullWhen(true)] out DirectoryInfo? dirInfo)
-		{
-			dirInfo = (Event == Fsevent.LeaveDir) ? mDirInfo : null;
-			return (dirInfo is not null);
-		}
-
-
-		public bool WhenFile([NotNullWhen(true)] out FileInfo? fileInfo)
-		{
-			fileInfo = (Event == Fsevent.File) ? mFileInfo : null;
-			return (fileInfo is not null);
-		}
-
-
-		public bool WhenError(
-				[NotNullWhen(true)] out Exception? exception,
-				[NotNullWhen(true)] out DirectoryInfo? dirInfo)
-		{
-			exception = (Event == Fsevent.Error) ? mException : null;
-			dirInfo = (Event == Fsevent.Error) ? mDirInfo : null;
-
-			return (exception is not null) && (dirInfo is not null);
-		}
-
-
-		public Fsevent Event { get; private set; } = Fsevent.None;
-
-
-		public Fscommand Command { get; set; } = Fscommand.Advance;
-
-
-		DirectoryInfo? mDirInfo = null;
-
-
-		FileInfo? mFileInfo = null;
-
-
-		Exception? mException = null;
-
-
-		internal Fsinfo(DirectoryInfo dirInfo, bool asLeaving = false)
-		{
-			Event = asLeaving ? Fsevent.LeaveDir : Fsevent.EnterDir;
-			mDirInfo = dirInfo;
-		}
-
-
-		internal Fsinfo(FileInfo fileInfo)
-		{
-			Event = Fsevent.File;
-			mFileInfo = fileInfo;
-		}
-
-
-		internal Fsinfo(Exception exception, DirectoryInfo dirInfo)
-		{
-			Event = Fsevent.Error;
-			mException = exception;
-			mDirInfo = dirInfo;
+			while (stack.Count >= 1);
 		}
 	}
 }

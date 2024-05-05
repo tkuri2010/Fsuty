@@ -13,8 +13,8 @@ namespace Tkuri2010.Fsuty.Xmp
         static void Main(string[] args)
         {
 			//Xmp1(args);
-			//Xmp3().GetAwaiter().GetResult();
-			Xmp4().GetAwaiter().GetResult();
+			Xmp3().GetAwaiter().GetResult();
+			//Xmp4().GetAwaiter().GetResult();
 			//Text.Std.LinesProcessorXmp1Grep.TryUseMemMapFileViewStream();
 			//Try_Path_Combine();
         }
@@ -45,12 +45,13 @@ namespace Tkuri2010.Fsuty.Xmp
 		}
 
 
+		[Obsolete]
 		static async Task Xmp2()
 		{
 			// you can use CancellationToken so that the app user can request cancel on UI.
 			CancellationToken ct = CancellationToken.None;
 
-			await foreach (var e in Fsentry.EnumerateAsync("../.", ct))
+			await foreach (var e in FsentryLegacy.EnumerateAsync("../.", ct))
 			{
 				if (e.Event == Fsevent.EnterDir)
 				{
@@ -83,35 +84,73 @@ namespace Tkuri2010.Fsuty.Xmp
 		static async Task Xmp3()
 		{
 			var sw = new System.Diagnostics.Stopwatch();
-			var all = new List<Filepath>();
+			var enterDirs = new List<Filepath>();
+			var files = new List<Filepath>();
 			var ct = CancellationToken.None;
 
 			sw.Start();
 
-			await foreach (var e in Fsentry.EnumerateAsync(@"D:\somewhere", ct))
+			var path = @"D:\somewhere";
+
+			if ("true".Length == 4)
 			{
-				if (e.Event == Fsevent.EnterDir || e.Event == Fsevent.File)
+				#pragma warning disable CS0612
+				await foreach (var e in FsentryLegacy.EnumerateAsync(path, ct).ConfigureAwait(false))
 				{
-					Console.WriteLine(e.RelativePath);
-					all.Add(e.RelativePath);
+					if (e.Event == Fsevent.EnterDir)
+					{
+						Console.WriteLine(e.RelativePath);
+						enterDirs.Add(e.RelativePath);
+					}
+					else if (e.Event == Fsevent.File)
+					{
+						Console.WriteLine(e.RelativePath);
+						files.Add(e.RelativePath);
+					}
 				}
+				Console.WriteLine("legacy");
+				#pragma warning restore CS0612
+			}
+			else
+			{
+				await foreach (var e in Fsentry.EnumerateAsync(path, ct).ConfigureAwait(false))
+				{
+					if (e is Fsentry.EnterDir enterDir)
+					{
+						Console.WriteLine(enterDir.RelativePath);
+						enterDirs.Add(enterDir.RelativePath);
+					}
+					else if (e is Fsentry.File file)
+					{
+						Console.WriteLine(file.RelativePath);
+						files.Add(file.RelativePath);
+					}
+					else if (e is Fsentry.Error error)
+					{
+						Console.WriteLine("error! " + error.Exception?.Message);
+						break;
+					}
+				}
+				Console.WriteLine("new");
 			}
 
 			sw.Stop();
 
-			Console.WriteLine("=============================================================");
-			Console.WriteLine("    GetTotalAllocatedBytes       : " + System.GC.GetTotalAllocatedBytes());
-			Console.WriteLine("GetAllocatedBytesForCurrentThread: " + System.GC.GetAllocatedBytesForCurrentThread());
-			Console.WriteLine("            Elapsed              : " + sw.Elapsed);
+			Console.WriteLine( "=============================================================");
+			Console.WriteLine( "    GetTotalAllocatedBytes       : " + GC.GetTotalAllocatedBytes());
+			Console.WriteLine( "GetAllocatedBytesForCurrentThread: " + GC.GetAllocatedBytesForCurrentThread());
+			Console.WriteLine( "            Elapsed              : " + sw.Elapsed);
+			Console.WriteLine($"Dirs:{enterDirs.Count}, files:{files.Count}");
 		}
 
 
 		/// <summary>
 		/// example usage of the Fsinfo class.
 		/// </summary>
+		[Obsolete]
 		static async Task Xmp4()
 		{
-			await foreach (var e in Fsinfo.EnumerateAsync(@"C:/Windows/Logs"))
+			await foreach (var e in FsinfoLegacy.EnumerateAsync(@"C:/Windows/Logs"))
 			{
 				if (e.WhenError(out var x, out var currentDirInfo))
 				{

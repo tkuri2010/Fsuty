@@ -1,47 +1,15 @@
-using System.Threading;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Linq;
-using System.IO;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
+using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
+
 
 namespace Tkuri2010.Fsuty
 {
-	public enum Fsevent
-	{
-		/// <summary>
-		/// (not used)
-		/// </summary>
-		None,
-		/// <summary>
-		/// (not used)
-		/// </summary>
-		Error,
-		/// <summary>
-		/// a file found
-		/// </summary>
-		File,
-		/// <summary>
-		/// a directory found, enter
-		/// </summary>
-		EnterDir,
-		/// <summary>
-		/// leaving from a directory
-		/// </summary>
-		LeaveDir,
-	}
-
-
-	public enum Fscommand
-	{
-		Advance,
-
-		SkipDirectory,
-	}
-
-
-	public class Fsentry
+	public abstract class Fsentry
 	{
 		/// <summary>
 		/// enumerates all file system entries, recursivery
@@ -49,7 +17,7 @@ namespace Tkuri2010.Fsuty
 		/// <param name="basePath"></param>
 		/// <param name="ct"></param>
 		/// <returns></returns>
-		public static IAsyncEnumerable<Fsentry> EnumerateAsync(Filepath basePath, CancellationToken ct = default)
+		public static IAsyncEnumerable<IEntry> EnumerateAsync(Filepath basePath, CancellationToken ct = default)
 		{
 			return EnumerateAsync(basePath.ToString(), ct);
 		}
@@ -61,122 +29,340 @@ namespace Tkuri2010.Fsuty
 		/// <param name="basePath"></param>
 		/// <param name="ct"></param>
 		/// <returns></returns>
-		public static async IAsyncEnumerable<Fsentry> EnumerateAsync(string basePath, [EnumeratorCancellation] CancellationToken ct = default)
+		public static async IAsyncEnumerable<IEntry> EnumerateAsync(string basePath, [EnumeratorCancellation] CancellationToken ct = default)
 		{
 			var y = new Detail.SimpleYielder();
 
-			var stack = new Stack<Fsentry>();
-			stack.Push(AsFirstEntry(basePath));
-			var isFirst = true;
+			var stack = new Stack<IEntry>();
 
-			while (1 <= stack.Count)
+			var currentDirPath = basePath;
+			var currentDirRelPath = Filepath.Empty;
+
+			do
 			{
-				var entry = stack.Pop();
-				if (isFirst)
-				{
-					isFirst = false;
-				}
-				else
-				{
-					yield return entry;
-
-					if (entry.Event != Fsevent.EnterDir)
-					{
-						continue;
-					}
-
-					stack.Push(AsLeavingDir(entry));
-
-					if (entry.Command != Fscommand.Advance)
-					{
-						continue;
-					}
-				}
-
+				#region Fill-Stack
 				try
 				{
-					foreach (var file in Directory.EnumerateFiles(entry.FullPathString))
+					#if false
+					// REJECT: こんな事をして列挙作業を別々にしても、却ってパフォーマンスは 2～3% くらい（ごくわずかだけど）下がる
+					var filesAsync = Task.Run(() => Directory.EnumerateFiles(currentDirPath));
+					var dirsAsync = Task.Run(() => Directory.EnumerateDirectories(currentDirPath));
+					#endif
+
+					foreach (var file in Directory.EnumerateFiles(currentDirPath))
 					{
-						if (y.Countup()) await y.YieldAsync();
+						if (y.Countup())
+						{
+							await y.YieldAsync(); // YieldAwaitable には ConfigureAwait() は存在しないらしい
+							ct.ThrowIfCancellationRequested();
+						}
 
-						stack.Push(new Fsentry(Fsevent.File, file, entry.RelativePath));
-
-						ct.ThrowIfCancellationRequested();
+						stack.Push(new File(file, Resolve(currentDirRelPath, file)));
 					}
 
-					foreach (var dir in Directory.EnumerateDirectories(entry.FullPathString))
+					foreach (var dir in Directory.EnumerateDirectories(currentDirPath))
 					{
-						if (y.Countup()) await y.YieldAsync();
+						if (y.Countup())
+						{
+							await y.YieldAsync();
+							ct.ThrowIfCancellationRequested();
+						}
 
-						stack.Push(new Fsentry(Fsevent.EnterDir, dir, entry.RelativePath));
-
-						ct.ThrowIfCancellationRequested();
+						stack.Push(new EnterDir(dir, Resolve(currentDirRelPath, dir)));
 					}
 				}
 				catch (Exception x)
 				{
-					stack.Push(new Fsentry(x, entry.FullPathString, entry.RelativePath));
+					stack.Push(new Error(new EnumerationException(currentDirPath, currentDirRelPath, x)));
 				}
+				#endregion
+
+				while (stack.TryPop(out var someEntry))
+				{
+					yield return someEntry;
+
+					if (someEntry.Reaction == FseventInternalReaction.EscapeParentDir)
+					{
+						#region Leave-Parent-Dir
+						for (; ; )
+						{
+							if (! stack.TryPeek(out var e))
+							{
+								yield break;
+							}
+
+							if (e is LeaveDir)
+							{
+								break;
+							}
+							else
+							{
+								stack.Pop();
+							}
+						}
+						#endregion
+					}
+
+					if (someEntry.Reaction != FseventInternalReaction.Advance)
+					{
+						continue;
+					}
+
+					if (someEntry is not EnterDir enterDir)
+					{
+						continue;
+					}
+
+					stack.Push(new LeaveDir(enterDir));
+
+					currentDirPath = enterDir.FullPathString;
+					currentDirRelPath = enterDir.RelativePath;
+					break;
+				}
+			}
+			while (stack.Count >= 1);
+		}
+
+
+		static Filepath Resolve(Filepath relativeParentDir, string fullPath)
+		{
+			return relativeParentDir.Combine(Filepath.Parse(Path.GetFileName(fullPath)).Items);
+		}
+
+
+		public interface IEntry
+		{
+			FseventInternalReaction Reaction { get; }
+
+			void LeaveParentDir();
+		}
+
+
+		public interface ISuccess : IEntry
+		{
+			/// <summary>Raw result value from `System.IO.Directory.Enum***()` </summary>
+			string FullPathString { get; }
+
+			Filepath RelativePath { get; }
+		}
+
+
+		public class EnterDir : ISuccess
+		{
+			public string FullPathString { get; private set; }
+
+
+			public Filepath RelativePath { get; private set; }
+
+
+			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
+
+
+			public EnterDir(string fullPathString, Filepath relativePath)
+			{
+				FullPathString = fullPathString;
+				RelativePath = relativePath;
+			}
+
+
+			public void LeaveParentDir()
+			{
+				Reaction = FseventInternalReaction.EscapeParentDir;
+			}
+
+
+			/// <summary>
+			/// Skip to enter dir.
+			/// </summary>
+			public void Skip()
+			{
+				Reaction = FseventInternalReaction.SkipEnterDir;
 			}
 		}
 
 
-		public Fsevent Event { get; private set; } = Fsevent.None;
+		public class LeaveDir : ISuccess
+		{
+			public string FullPathString { get; private set; }
 
+			public Filepath RelativePath { get; private set; }
+
+			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
+
+			public LeaveDir(string fullPathString, Filepath relativePath)
+			{
+				FullPathString = fullPathString;
+				RelativePath = relativePath;
+			}
+
+
+			public LeaveDir(EnterDir enterDir)
+					: this(enterDir.FullPathString, enterDir.RelativePath)
+			{
+			}
+
+
+			public void LeaveParentDir()
+			{
+				Reaction = FseventInternalReaction.EscapeParentDir;
+			}
+		}
+
+
+		public class File : ISuccess
+		{
+			public string FullPathString { get; private set; }
+
+			public Filepath RelativePath { get; private set; }
+
+			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
+
+			public File(string fullPathString, Filepath relativePath)
+			{
+				FullPathString = fullPathString;
+				RelativePath = relativePath;
+			}
+
+			public void LeaveParentDir()
+			{
+				Reaction = FseventInternalReaction.EscapeParentDir;
+			}
+		}
+
+
+		public class Error : IEntry
+		{
+			public Exception? Exception { get; private set; }
+
+
+			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
+
+
+			public Error(Exception exception)
+			{
+				Exception = exception;
+			}
+
+
+			public void LeaveParentDir()
+			{
+				Reaction = FseventInternalReaction.EscapeParentDir;
+			}
+		}
+
+
+		public class EnumerationException : Exception
+		{
+			/// <summary>
+			/// The directory path that tried to enumerate items. May be absolute, or may be relative.
+			/// </summary>
+			public string DirPathString { get; private set; }
+
+
+			/// <summary>
+			/// The relative path from Fsentry.EnumerateAsync(HERE) of the `DirPathString`. May be Empty.
+			/// </summary>
+			public Filepath DirRelativePath { get; private set; }
+
+
+			public EnumerationException(string dirPath, Filepath relativePath, Exception innerException)
+				: base($"File entry enumeration failed for dir {dirPath}", innerException)
+			{
+				DirPathString = dirPath;
+				DirRelativePath = relativePath;
+			}
+		}
+
+	}
+
+
+	public enum FseventInternalReaction
+	{
+		Advance = 0,
+
+		EscapeParentDir = 1,
+
+		SkipEnterDir = 2,
+	}
+
+
+#if false
+	public class FsentryError : Fsentry
+	{
+		public Exception? Error { get; private set; } = null;
+
+
+		public FsentryError(Exception? error = null)
+		{
+			Error = error;
+		}
+	}
+
+
+	public abstract class FsentrySuccess : Fsentry
+	{
 		/// <summary>Raw result value from `System.IO.Directory.Enum***()` </summary>
 		public string FullPathString { get; private set; } = string.Empty;
 
 		public Filepath RelativePath { get; private set; } = Filepath.Empty;
 
-		public Fscommand Command  { get; set; } = Fscommand.Advance;
-
-		public Exception? Exception { get; private set; } = null;
-
-
-		internal Fsentry()
+		protected FsentrySuccess(string fullPath, Filepath relativeParentDir)
 		{
+			FullPathString = fullPath;
+			RelativePath = relativeParentDir.Combine(Filepath.Parse(Path.GetFileName(fullPath)).Items);
 		}
 
-
-		internal Fsentry(Fsevent ev, string rawFullPathString, Filepath relativeParentDir)
+		/// <summary>
+		/// (just copying)
+		/// </summary>
+		protected FsentrySuccess(FsentrySuccess entry)
 		{
-			Event = ev;
-			FullPathString = rawFullPathString;
-			RelativePath = relativeParentDir.Combine(Filepath.Parse(Path.GetFileName(rawFullPathString)).Items);
-		}
-
-
-		internal Fsentry(Exception x, string currentFullPathString, Filepath currentDir)
-		{
-			Event = Fsevent.Error;
-			FullPathString = currentFullPathString;
-			RelativePath = currentDir;
-			Exception = x;
-		}
-
-
-		// 初回の列挙のための特別なインスンタンス。取り扱い注意!
-		internal static Fsentry AsFirstEntry(string basePath)
-		{
-			return new()
-			{
-				FullPathString = basePath, // プロパティ名に反して、これは相対パスかも知れない。本インスタンスの取り扱いには注意!
-				RelativePath = Filepath.Empty,
-			};
-		}
-
-
-		internal static Fsentry AsLeavingDir(Fsentry enteringDir)
-		{
-			// assert: enteringDir.Event == FsentryEvent.EnterDir
-
-			return new()
-			{
-				Event = Fsevent.LeaveDir,
-				FullPathString = enteringDir.FullPathString,
-				RelativePath = enteringDir.RelativePath,
-			};
+			FullPathString = entry.FullPathString;
+			RelativePath = entry.RelativePath;
 		}
 	}
 
+
+	/// <summary>
+	/// A dir found, will enter.
+	/// </summary>
+	public class FsentryEnterDir : FsentrySuccess
+	{
+		public FsentryEnterDir(string fullPath, Filepath relativeParentDir)
+				: base(fullPath, relativeParentDir)
+		{
+		}
+
+
+		public void Skip()
+		{
+			mReaction = FseventInternalReaction.SkipEnterDir;
+		}
+	}
+
+
+	/// <summary>
+	/// Leaving the dir.
+	/// </summary>
+	public class FsentryLeaveDir : FsentrySuccess
+	{
+		public FsentryLeaveDir(FsentryEnterDir enterDir)
+				: base(enterDir)
+		{
+		}
+	}
+
+
+	/// <summary>
+	/// A file found.
+	/// </summary>
+	public class FsentryFile : FsentrySuccess
+	{
+		public FsentryFile(string fullPath, Filepath relativeParentDir)
+				: base(fullPath, relativeParentDir)
+		{
+		}
+	}
+#endif
 }
+
