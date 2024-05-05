@@ -18,6 +18,13 @@ https://github.com/dotnet/roslyn/issues/45510#issuecomment-725091019
 忘れた。おそらく、サポートしたい dotnet SDK のバージョンの都合に合わせたはずだけど、合理性がなさそうであれば 10 以降に上げたい。フラットな `namespace` とか使いたい。
 
 
+## SDK バージョンは 6.0.100 ではだめ
+
+https://github.com/dotnet/runtime/issues/64103
+
+少なくとも 6.0.300 で解消されているらしい
+
+
 ## `PathCanonicalize` (shlwapi.dll / Win10) の挙動
 
 ```c++
