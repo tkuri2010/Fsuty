@@ -272,6 +272,16 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 					var spaces = CountSpaces(line);
 					var takes = Math.Min(prevLine.Length, spaces);
 					var newLine = prevLine.Substring(0, takes) + line.Substring(takes);
+
+					#region asserts that the `takes` points a safe position
+					if (takes < prevLine.Length
+							&& prevLine[takes - 1] is not ' ' and not '/'
+							&& prevLine[takes    ] is not ' ' and not '/')
+					{
+						throw new Exception($"Pointing to the middle of the directory name string. prevLine=[{prevLine}] / current line=[{line}] / mixed result=[{newLine}]");
+					}
+					#endregion
+
 					yield return newLine;
 					prevLine = newLine;
 				}

@@ -317,11 +317,11 @@ namespace Tkuri2010.Fsuty.Tests
 				"dir2",
 				"     / dir2-1",
 				"              / dir2-1-1",
-				"                       / file2-1-1.txt",
-				"                       / file2-1-2.txt",
+				"                         / file2-1-1.txt",
+				"                         / file2-1-2.txt",
 				"              / dir2-1-2",
-				"                       / file2-1-3.txt",
-				"                       / file2-1-4.txt",
+				"                         / file2-1-3.txt",
+				"                         / file2-1-4.txt",
 				"     / dir2-2",
 				"              / dir2-2-1",
 				"              / dir2-2-2",
@@ -345,13 +345,11 @@ namespace Tkuri2010.Fsuty.Tests
 					}
 					else
 					{
-						StaticTestContext.WriteLine($"enter dir: {enterDir.RelativePath}");
 						RemoveMatched(pathSet, enterDir.FullPathString);
 					}
 				}
 				else if (e is Fsentry.File file)
 				{
-					StaticTestContext.WriteLine($"file: {file.RelativePath}");
 					RemoveMatched(pathSet, file.FullPathString);
 				}
 				else if (e is Fsentry.Error x)
@@ -362,11 +360,6 @@ namespace Tkuri2010.Fsuty.Tests
 
 			// LeaveParentDir() msut be called only once.
 			Assert.AreEqual(1, leaveParentDirCount);
-
-			foreach (var p in pathSet)
-			{
-				StaticTestContext.WriteLine($"remaining: {p}");
-			}
 
 			Assert.AreEqual(6, pathSet.Count);
 			Assert.IsTrue(pathSet.Any(it => it.EndsWith("dir2-1-1")));

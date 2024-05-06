@@ -13,7 +13,8 @@ jobs:
     runs-on: ${{matrix.os}}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        #os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest, windows-latest]  # macOSのTEMPディレクトリの命名が不明なので、一旦外す
 
     steps:
     - uses: actions/checkout@v3
