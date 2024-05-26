@@ -1,5 +1,20 @@
 # Fsuty
-Local Files and Directories Utility (Path descriptor, Directory tree walker, etc...)
+.NET library of Utility for Local Files and Directories (Path descriptor, Directory tree walker, etc...)
+
+[![build and test](https://github.com/tkuri2010/Fsuty/actions/workflows/test.yaml/badge.svg)](https://github.com/tkuri2010/Fsuty/actions/workflows/test.yaml)
+
+## NOT TO USE (version 1.0.0-delta.20240430)
+
+The current version (1.0.0-delta.20240430) works as I intended, but is disorganized and contains various elements that are not yet systematically arranged. This version is committed as a personal memorial.
+
+In particular, I think that it was a bad idea to make the `Fsentry.EnumerateAsync()` an asynchronous process. I an going to make some significant changes.
+
+
+## Basic info
+
+- Supports .NET Standard 2.1
+- Tested on Windows and Linux. Maybe also it works on macOS well. (not tested on macOS yet... <https://github.com/tkuri2010/Fsuty/issues/32>)
+
 
 ## Classes
 
@@ -52,11 +67,12 @@ Edit `*.csproj` file...
 ```xml
 <Project Sdk="(snip...)">
   <ProjectGroup>
-    <!-- your project's settings here -->
+    <!-- settings of your project here -->
   </ProjectGroup>
 
   <ItemGroup>
     <!-- other dependencies here -->
+
     <PackageReference Include="Tkuri2010.Fsuty" Version="1.0.0-foobar" />  <!-- add this -->
   </ItemGroup>
 ```
@@ -65,9 +81,9 @@ Edit `*.csproj` file...
 ## How to build this project and get the `Tkuri2010.Fsuty.***.nupkg`
 
 ```ps
-PS> cd src\Tkuri2010.Fsuty
+> cd src\Tkuri2010.Fsuty
 
-PS> dotnet pack -c Release
+> dotnet pack -c Release
 ```
 
 ## class `Filepath` (namespace `Tkuri2010.Fsuty`)
@@ -100,7 +116,7 @@ File path parser / descriptor.
     var combined = parent.Combine(another.Items);
         //=> C:\dir1\dir2\more\another_file.dat
 ```
-→ more details: [\[./doc/class_filepath.md\]](./doc/class_filepath.md)
+→ more details: [./doc/class_filepath.md](./doc/class_filepath.md)
 
 
 ## class `Fsentry` (namespace `Tkuri2010.Fsuty`)
@@ -108,45 +124,49 @@ File path parser / descriptor.
 Files and directories enumeration utility. Supports [Asynchronous streams](https://docs.microsoft.com/ja-jp/dotnet/csharp/whats-new/csharp-8#asynchronous-streams).
 
 ```cs
-	async Task DoMyWorkAsync(Filepath baseDir, [EnumeratorCancellation] CancellationToken ct = default)
+	async Task DoMyWorkAsync(Filepath baseDir, CancellationToken ct = default)
 	{
 		// for example, we want to collect 100 files.
 		var first100Files = new List<Filepath>();
 
-		await foreach (var item in Fsentry.EnumerateAsync(baseDir, ct))
+		await foreach (var it in Fsentry.EnumerateAsync(baseDir, ct).ConfigureAwait(false))
 		{
 
-			// ex)
-			//   baseDir (argument)   =>  "F:\our\works"
-			//   item.FullPathString  =>  "F:\our\works\dir\more_dir\file.txt" (string)
-			//   item.RelativePath    =>               "dir\more_dir\file.txt" (Filepath object)
-
-			if (item.Event == Fsevent.EnterDir)
+			if (it is Fsentry.EnterDir enterDir)
 			{
+				// ex)
+				//   baseDir (argument)       =>  "F:\our\works"
+				//   enterDir.FullPathString  =>  "F:\our\works\dir\more_dir\file.txt" (string)
+				//   enterDir.RelativePath    =>               "dir\more_dir\file.txt" (Filepath object)
+
 				// we can skip walking on the specified directory.
-				if (item.FullPathString.EndsWith(".git"))
+				if (enterDir.FullPathString.EndsWith(".git"))
 				{
-					item.Command = Fscommand.SkipDirectory;
+					enterDir.Skip();
 					continue;
 				}
 
-				Console.WriteLine($"Enter Dir: {item.FullPathString}");
+				Console.WriteLine($"Enter Dir: {enterDir.FullPathString}");
 			}
-			else if (item.Event == Fsevent.LeaveDir)
+			else if (it is Fsentry.LeaveDir leaveDir)
 			{
-				Console.WriteLine($"Leave Dir: {item.FullPathString}");
+				Console.WriteLine($"Leave Dir: {leaveDir.FullPathString}");
 			}
-			else if (item.Event == Fsevent.File)
+			else if (it is Fsentry.File file)
 			{
-				first100Files.Add(item.RelativePath);
+				first100Files.Add(file.RelativePath);
 				if (100 <= first100Files.Count)
 				{
 					break;
 				}
 			}
-			else if (item.Event == Fsevent.Error)
+			else if (it is Fsentry.Error error)
 			{
-				// error...
+				if (error.Exception is Fsentry.EnumerationException ex)
+				{
+					Console.WriteLine($"error in directory: " + ex.DirPathString);
+					Console.WriteLine("cause: " + (ex.InnerException?.Message ?? "no idea..."));
+				}
 			}
 		}
 
@@ -155,31 +175,32 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 ```
 
 
-## (Experimental) class `Fsinfo` (namespace `Tkuri2010.Fsuty`)
+## class `Fsinfo` (namespace `Tkuri2010.Fsuty`)
 
-***!!! Unstable yet !!!***
-
-Enumerates file system entries, as `DirectoryInfo` or `FileInfo`.
+Enumerates file system entries, as `System.IO.DirectoryInfo` or `System.IO.FileInfo`.
 
 ```cs
-async Task DoMyWorkAsync(Filepath baseDir, [EnumeratorCancellation] CancellationToken ct = default)
+async Task DoMyWorkAsync(Filepath baseDir, CancellationToken ct = default)
 {
-	await foreach (var item in Fsinfo.EnumerateAsync(baseDir, ct))
+	await foreach (var it in Fsinfo.EnumerateAsync(baseDir, ct).ConfigureAwait(false))
 	{
-		if (item.WhenEnterDir(out DirectoryInfo enterDirInfo))
+		if (it is Fsinfo.EnterDir enterDir)
 		{
-			// dirInfo is a `System.IO.DirectoryInfo` here.
-			// do something...
+			// enterDir.Info is a `System.IO.DirectoryInfo` here.
+			Console.WriteLine($"enter dir: {enterDir.Info.Name}");
 		}
-		else if (item.WhenLeaveDir(out DirectoryInfo leaveDirInfo))
+		else if (it is Fsinfo.LeaveDir leaveDir)
 		{
-			// do something...
+			// also leaveDir.Info is a `System.IO.DirectoryInfo` here.
+			Console.WriteLine($"leave dir: {leaveDir.Info.Name}");
+			// ...
 		}
-		else if (item.WhenFile(out FileInfo fileInfo))
+		else if (it is Fsinfo.File file))
 		{
-			// fileInfo is a `System.IO.FileInfo` here.
+			// file.Info is a `System.IO.FileInfo` here.
+			Console.WriteLine($"file: {file.Info.Name}");
 		}
-		else if (item.WhenError(out Exception exception, out DirectoryInfo currentDirInfo))
+		else if (it is Fsinfo.Error error)
 		{
 			// error...
 		}
@@ -189,7 +210,7 @@ async Task DoMyWorkAsync(Filepath baseDir, [EnumeratorCancellation] Cancellation
 
 ## (side-product) class `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
 
-When we enumerates file-system-entries, we may hold path strings like:
+When we enumerate file system entries, we may hold a lot of path strings like:
 ```
  "var" "log" "httpd"                       <-- one entry
  "var" "log" "httpd" "server1"             <-- another entry
@@ -210,14 +231,14 @@ But, actualy, what we need are only these strings and links:
    `-  "log"
          +-  "httpd"
          |     +-  "server1"
-         |     |    +-  "access"
-         |     |    +-  "access.1"
-         |     |    `-  "access.2"
+         |     |     +-  "access"
+         |     |     +-  "access.1"
+         |     |     `-  "access.2"
          |     `-  "server2"
          |           `-  "access"
          +-  "php-fpm"
          |     +-  "error_log"
          |     +-  "error_log.1"
 ```
-`LinkedCollection<E>` is designed to hold this structures efficiently.
+`LinkedCollection<E>` is designed to hold this structure efficiently.
 

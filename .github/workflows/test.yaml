@@ -1,0 +1,38 @@
+name: build and test
+
+on:
+  push:
+
+env:
+  DOTNET_VERSION: '6.0.300'
+
+jobs:
+  fsuty-test:
+
+    name: Fsuty-test-${{matrix.os}}
+    runs-on: ${{matrix.os}}
+    strategy:
+      matrix:
+        #os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest, windows-latest]  # macOSのTEMPディレクトリの命名が特別なので、再考が必要
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Install dependencies
+      working-directory: ./src
+      run: dotnet restore
+
+    - name: Build
+      working-directory: ./src/Tkuri2010.Fsuty.Tests
+      run: dotnet build --configuration Release --no-restore
+    
+    - name: Test
+      working-directory: ./src/Tkuri2010.Fsuty.Tests
+      run: dotnet test --no-restore --verbosity normal
+

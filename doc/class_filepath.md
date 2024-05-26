@@ -57,7 +57,7 @@ Parsed as:
     3: path items. The starting "." is one of items here. You can "canonicalize" easily.
 ```
 
-## Supported path formsts.
+## Supported path formats.
 
 Well known simple UNIX style paths:
 
@@ -240,7 +240,7 @@ Parses the path string.
 #### Description
 Represents a prefix part of MS-DOS/Windows style path. For instance, a drive letter, or a shared folder's server name and share name, and so on.
 
-See [\[class_pathprefix.md\]](./class_pathprefix.md) for more detail.
+See [`class_pathprefix.md`](./class_pathprefix.md) for more detail.
 
 #### Example
 ```cs
@@ -486,7 +486,7 @@ Consider this:
 
     var xxx = abs.Combine("/root");  //=> ... ???
 ```
-Where does the `xxx` object point do you expect? `"/opt/some-tmp/root"`? or `"/root"`? I don't want to be confused by this design.
+Where does the `xxx` object point do you expect? `"/opt/some-tmp/root"`? or `"/root"`? I don't want to be bothered with this design.
 
 I have no plans to provide `Combine(Filepath)` nor `Combine(string)` methods. We should remember that the `Combine(PathItems)` method takes a __RELATIVE path-items-object only__.
 
