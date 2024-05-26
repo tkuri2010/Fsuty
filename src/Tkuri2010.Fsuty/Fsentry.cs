@@ -81,7 +81,7 @@ namespace Tkuri2010.Fsuty
 				{
 					yield return someEntry;
 
-					if (someEntry.Reaction == FseventInternalReaction.EscapeParentDir)
+					if (someEntry.Reaction == FseventInternalReaction.LeaveParentDir)
 					{
 						#region Leave-Parent-Dir
 						for (; ; )
@@ -130,23 +130,39 @@ namespace Tkuri2010.Fsuty
 		}
 
 
+		/// <summary>(opaque item)</summary>
 		public interface IEntry
 		{
+			/// <summary>(internal use only)</summary>
 			FseventInternalReaction Reaction { get; }
 
+
+			/// <summary>
+			/// Command to leave parent directory.
+			/// </summary>
 			void LeaveParentDir();
 		}
 
 
+		/// <summary>(opaque item)</summary>
 		public interface ISuccess : IEntry
 		{
-			/// <summary>Raw result value from `System.IO.Directory.Enum***()` </summary>
+			/// <summary>
+			/// Raw result value from <code>System.IO.Directory.Enum***()</code>.
+			/// </summary>
 			string FullPathString { get; }
 
+
+			/// <summary>
+			/// Relative path object from the path input to <code>EnumerateAsync(HERE)</code>.
+			/// </summary>
 			Filepath RelativePath { get; }
 		}
 
 
+		/// <summary>
+		/// Entering into a Directory
+		/// </summary>
 		public class EnterDir : ISuccess
 		{
 			public string FullPathString { get; private set; }
@@ -158,6 +174,11 @@ namespace Tkuri2010.Fsuty
 			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
 
 
+			/// <summary>
+			/// (do not call directly)
+			/// </summary>
+			/// <param name="fullPathString"></param>
+			/// <param name="relativePath"></param>
 			public EnterDir(string fullPathString, Filepath relativePath)
 			{
 				FullPathString = fullPathString;
@@ -167,12 +188,12 @@ namespace Tkuri2010.Fsuty
 
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.EscapeParentDir;
+				Reaction = FseventInternalReaction.LeaveParentDir;
 			}
 
 
 			/// <summary>
-			/// Skip to enter dir.
+			/// Command to skip entering into directory.
 			/// </summary>
 			public void Skip()
 			{
@@ -181,6 +202,9 @@ namespace Tkuri2010.Fsuty
 		}
 
 
+		/// <summary>
+		/// Leaving from a directory.
+		/// </summary>
 		public class LeaveDir : ISuccess
 		{
 			public string FullPathString { get; private set; }
@@ -189,6 +213,11 @@ namespace Tkuri2010.Fsuty
 
 			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
 
+			/// <summary>
+			/// (do not call directly)
+			/// </summary>
+			/// <param name="fullPathString"></param>
+			/// <param name="relativePath"></param>
 			public LeaveDir(string fullPathString, Filepath relativePath)
 			{
 				FullPathString = fullPathString;
@@ -196,6 +225,10 @@ namespace Tkuri2010.Fsuty
 			}
 
 
+			/// <summary>
+			/// (do not call directly)
+			/// </summary>
+			/// <param name="enterDir"></param>
 			public LeaveDir(EnterDir enterDir)
 					: this(enterDir.FullPathString, enterDir.RelativePath)
 			{
@@ -204,11 +237,14 @@ namespace Tkuri2010.Fsuty
 
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.EscapeParentDir;
+				Reaction = FseventInternalReaction.LeaveParentDir;
 			}
 		}
 
 
+		/// <summary>
+		/// File found.
+		/// </summary>
 		public class File : ISuccess
 		{
 			public string FullPathString { get; private set; }
@@ -217,6 +253,11 @@ namespace Tkuri2010.Fsuty
 
 			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
 
+			/// <summary>
+			/// (do not call directly)
+			/// </summary>
+			/// <param name="fullPathString"></param>
+			/// <param name="relativePath"></param>
 			public File(string fullPathString, Filepath relativePath)
 			{
 				FullPathString = fullPathString;
@@ -225,19 +266,30 @@ namespace Tkuri2010.Fsuty
 
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.EscapeParentDir;
+				Reaction = FseventInternalReaction.LeaveParentDir;
 			}
 		}
 
 
+		/// <summary>
+		/// Error
+		/// </summary>
 		public class Error : IEntry
 		{
+			/// <summary>
+			/// Thrown exception object (if available).
+			/// Typically it may be an EnumerationException,
+			/// </summary>
 			public Exception? Exception { get; private set; }
 
 
 			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
 
 
+			/// <summary>
+			/// (do not call directly)
+			/// </summary>
+			/// <param name="exception">thrown exception object</param>
 			public Error(Exception exception)
 			{
 				Exception = exception;
@@ -246,11 +298,15 @@ namespace Tkuri2010.Fsuty
 
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.EscapeParentDir;
+				Reaction = FseventInternalReaction.LeaveParentDir;
 			}
 		}
 
 
+		/// <summary>
+		/// Some error while enumerating file system items.
+		/// Typically, this instance has InnerException for detail.
+		/// </summary>
 		public class EnumerationException : Exception
 		{
 			/// <summary>
@@ -276,11 +332,12 @@ namespace Tkuri2010.Fsuty
 	}
 
 
+	/// <summary>(internal use)</summary>
 	public enum FseventInternalReaction
 	{
 		Advance = 0,
 
-		EscapeParentDir = 1,
+		LeaveParentDir = 1,
 
 		SkipEnterDir = 2,
 	}

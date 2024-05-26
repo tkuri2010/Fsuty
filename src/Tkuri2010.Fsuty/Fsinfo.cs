@@ -11,36 +11,58 @@ namespace Tkuri2010.Fsuty
 	/// </summary>
 	public class Fsinfo
 	{
+		/// <summary>(opaque item)</summary>
 		public interface IInfo
 		{
+			/// <summary>(internal use only)</summary>
 			FseventInternalReaction Reaction { get; }
 
+			/// <summary>
+			/// Command to leave parent directory.
+			/// </summary>
 			void LeaveParentDir();
 		}
 
 
+		/// <summary>(opaque item)</summary>
 		public interface ISuccess : IInfo
 		{
 		}
 
 
+		/// <summary>
+		/// Entering into a Directory
+		/// </summary>
 		public class EnterDir : ISuccess
 		{
+			/// <summary>
+			/// DirectoryInfo
+			/// </summary>
 			public DirectoryInfo Info { get; private set; }
+
 
 			public FseventInternalReaction Reaction { get; private set; } = FseventInternalReaction.Advance;
 
+
+			/// <summary>
+			/// (do not call directly)
+			/// </summary>
+			/// <param name="info"></param>
 			public EnterDir(DirectoryInfo info)
 			{
 				Info = info;
 			}
 
+
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.EscapeParentDir;
+				Reaction = FseventInternalReaction.LeaveParentDir;
 			}
 
 
+			/// <summary>
+			/// Command to skip entering into directory.
+			/// </summary>
 			public void Skip()
 			{
 				Reaction = FseventInternalReaction.SkipEnterDir;
@@ -48,49 +70,87 @@ namespace Tkuri2010.Fsuty
 		}
 
 
+		/// <summary>
+		/// Leaving from a directory.
+		/// </summary>
 		public class LeaveDir : ISuccess
 		{
+			/// <summary>
+			/// DirectoryInfo
+			/// </summary>
 			public DirectoryInfo Info { get; private set; }
+
 
 			public FseventInternalReaction Reaction { get; private set; } = FseventInternalReaction.Advance;
 
+
+			/// <summary>
+			/// (do not call directly)
+			/// </summary>
+			/// <param name="enterDir"></param>
 			public LeaveDir(EnterDir enterDir)
 			{
 				Info = enterDir.Info;
 			}
 
+
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.EscapeParentDir;
+				Reaction = FseventInternalReaction.LeaveParentDir;
 			}
 		}
 
 
+		/// <summary>
+		/// File found.
+		/// </summary>
 		public class File : ISuccess
 		{
+			/// <summary>
+			/// FileInfo
+			/// </summary>
 			public FileInfo Info { get; private set; }
+
 
 			public FseventInternalReaction Reaction { get; private set; } = FseventInternalReaction.Advance;
 
+
+			/// <summary>
+			/// (do not call directly)
+			/// </summary>
+			/// <param name="info"></param>
 			public File(FileInfo info)
 			{
 				Info = info;
 			}
 
+
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.EscapeParentDir;
+				Reaction = FseventInternalReaction.LeaveParentDir;
 			}
 		}
 
 
+		/// <summary>
+		/// Error
+		/// </summary>
 		public class Error : IInfo
 		{
+			/// <summary>
+			/// Thrown exception object (if available).
+			/// Typically it may be an EnumerationException,
+			/// </summary>
 			public Exception? Exception { get; private set; }
+
 
 			public FseventInternalReaction Reaction { get; private set; } = FseventInternalReaction.Advance;
 
 
+			/// <summary>
+			/// (do not call directly)
+			/// </summary>
+			/// <param name="exception"></param>
 			public Error(Exception? exception)
 			{
 				Exception = exception;
@@ -99,13 +159,20 @@ namespace Tkuri2010.Fsuty
 
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.EscapeParentDir;
+				Reaction = FseventInternalReaction.LeaveParentDir;
 			}
 		}
 
 
+		/// <summary>
+		/// Some error while enumerating file system items.
+		/// Typically, this instance has InnerException for detail.
+		/// </summary>
 		public class EnumerationException : Exception
 		{
+			/// <summary>
+			/// The DirectoryInfo that tried to enumerate items.
+			/// </summary>
 			public DirectoryInfo CurrentDirectoryInfo { get; private set; }
 
 
@@ -141,6 +208,12 @@ namespace Tkuri2010.Fsuty
 		}
 
 
+		/// <summary>
+		/// enumerates all file system entries as DirectoryInfo or FileInfo, recursivery
+		/// </summary>
+		/// <param name="baseDir"></param>
+		/// <param name="ct"></param>
+		/// <returns></returns>
 		public static async IAsyncEnumerable<IInfo> EnumerateAsync(DirectoryInfo baseDir, [EnumeratorCancellation] CancellationToken ct = default)
 		{
 			var y = new Detail.SimpleYielder();
@@ -186,7 +259,7 @@ namespace Tkuri2010.Fsuty
 				{
 					yield return someInfo;
 
-					if (someInfo.Reaction == FseventInternalReaction.EscapeParentDir)
+					if (someInfo.Reaction == FseventInternalReaction.LeaveParentDir)
 					{
 						#region  Leave-Parent-Dir
 						for (; ; )

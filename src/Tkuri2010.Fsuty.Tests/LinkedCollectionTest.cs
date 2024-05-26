@@ -7,6 +7,43 @@ namespace Tkuri2010.Fsuty.Tests
 	public class LinkedCollectionTest
 	{
 		[TestMethod]
+		public void Spec_SimpleUsage()
+		{
+			var empty = new LinkedCollection<string>();
+
+			var list1 = empty.AppendElement("dir1");
+			Assert.AreEqual("dir1", list1[0]);
+
+			var list1_1 = list1.AppendElement("dir1-1");
+			Assert.AreEqual(2, list1_1.Count);
+			Assert.AreEqual("dir1", list1_1[0]);
+			Assert.AreEqual("dir1-1", list1_1[1]);
+
+			var list1_2 = list1.AppendElement("dir1-2");
+			Assert.AreEqual(2, list1_2.Count);
+			Assert.AreEqual("dir1", list1_2[0]);
+			Assert.AreEqual("dir1-2", list1_2[1]);
+
+			var list2 = empty.AppendRange(new string[]{ "var", "log" });
+			var list2_1 = list2.AppendElement("httpd");
+			var list2_1_1 = list2_1.AppendElement("log.1");
+			var list2_1_2 = list2_1.AppendElement("log.2");
+			var list2_1_3 = list2_1.AppendElement("log.3");
+			Assert.AreEqual(4, list2_1_3.Count);
+			Assert.AreEqual("var", list2_1_3[0]);
+			Assert.AreEqual("log", list2_1_3[1]);
+			Assert.AreEqual("httpd", list2_1_3[2]);
+			Assert.AreEqual("log.3", list2_1_3[3]);
+
+			// list2_1_* do not own the string objects of "var", "log", and "httpd".
+			// They share these string objects among themselves.
+			Assert.IsTrue(ReferenceEquals(list2[0], list2_1_1[0]));
+			Assert.IsTrue(ReferenceEquals(list2[0], list2_1_2[0]));
+			Assert.IsTrue(ReferenceEquals(list2[0], list2_1_3[0]));
+		}
+
+
+		[TestMethod]
 		public void Test_EmptyInstance_ManyMethods()
 		{
 			var empty = new LinkedCollection<string>();
