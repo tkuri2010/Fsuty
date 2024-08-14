@@ -3,16 +3,10 @@
 
 [![build and test](https://github.com/tkuri2010/Fsuty/actions/workflows/test.yaml/badge.svg)](https://github.com/tkuri2010/Fsuty/actions/workflows/test.yaml)
 
-## NOT TO USE (version 1.0.0-delta.20240430)
-
-The current version (1.0.0-delta.20240430) works as I intended, but is disorganized and contains various elements that are not yet systematically arranged. This version is committed as a personal memorial.
-
-In particular, I think that it was a bad idea to make the `Fsentry.EnumerateAsync()` an asynchronous process. I an going to make some significant changes.
-
 
 ## Basic info
 
-- Supports .NET Standard 2.1
+- Supports .NET Standard 2.0 (so, as you know, it can also be used with .NET Framework 4.7)
 - Tested on Windows and Linux. Maybe also it works on macOS well. (not tested on macOS yet... <https://github.com/tkuri2010/Fsuty/issues/32>)
 
 
@@ -27,6 +21,12 @@ In particular, I think that it was a bad idea to make the `Fsentry.EnumerateAsyn
 - (side-product) `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
 	- Unique formed collection class.
 
+
+## Living Examples(?)
+
+See [`Tkuri2010.Fsuty.Xmp` project](./src/Tkuri2010.Fsuty.Xmp/) for living examples(?).
+
+
 ## Download the `*.nupkg`
 
 I'm not sure yet that this is a library worth publishing on nuget.
@@ -37,19 +37,19 @@ Download the `Tkuri2010.Fsuty.***.nupkg` file from [Releases page](https://githu
 
 I'm not sure but this is what I tried. Looks work. (Is there any official documentation? I could not find out yet..)
 
-Your project's structure:
+Structure of your project:
 ```
-  YourSolution/
-    +-- libs/
-    +    `--  Tkuri2010.Fsuty.1.0.0-foobar.nupkg     <-- where you downloded
-    `-- src/
-         +-- YourProject/
-         +    +-- nuget.config          <-- Add this file
-         +    +-- YourProject.csproj    <-- And edit your project file
+  📂 YourSolution/
+    +-- 📂 libs/
+    +    `-- 📄 Tkuri2010.Fsuty.1.0.0-foobar.nupkg     <-- where you downloded
+    `-- 📂 src/
+         +-- 📂 YourProject/
+         +    +-- 📄 nuget.config          <-- Add this file
+         +    +-- 📄 YourProject.csproj    <-- And edit your project file
          +    +-- ...
-         `-- TestOfYourProject/
-              +-- nuget.config
-              +-- TestOfYourProject.csproj
+         `-- 📂 TestOfYourProject/
+              +-- 📄 nuget.config
+              +-- 📄 TestOfYourProject.csproj
               +-- ...
 ```
 
@@ -86,6 +86,7 @@ Edit `*.csproj` file...
 > dotnet pack -c Release
 ```
 
+
 ## class `Filepath` (namespace `Tkuri2010.Fsuty`)
 
 File path parser / descriptor.
@@ -94,7 +95,7 @@ File path parser / descriptor.
 
     Console.WriteLine( path.ToString() );
         //=> C:\dir1\dir2\file.dat
-    Console.WriteLine( path.IsAbsolute );
+    Console.WriteLine( path.IsFromRoot );
         //=> true
     Console.WriteLine( path.Items[0] );
         //=> dir1
@@ -110,7 +111,7 @@ File path parser / descriptor.
 
     var another = Filepath.Parse("more/another_file.dat");
 
-    Console.WriteLine( another.IsAbsolute );
+    Console.WriteLine( another.IsFromRoot );
         //=> false
 
     var combined = parent.Combine(another.Items);
@@ -121,15 +122,15 @@ File path parser / descriptor.
 
 ## class `Fsentry` (namespace `Tkuri2010.Fsuty`)
 
-Files and directories enumeration utility. Supports [Asynchronous streams](https://docs.microsoft.com/ja-jp/dotnet/csharp/whats-new/csharp-8#asynchronous-streams).
+Files and directories enumeration utility. 
 
 ```cs
-	async Task DoMyWorkAsync(Filepath baseDir, CancellationToken ct = default)
+	void DoMyWork(Filepath baseDir)
 	{
 		// for example, we want to collect 100 files.
 		var first100Files = new List<Filepath>();
 
-		await foreach (var it in Fsentry.EnumerateAsync(baseDir, ct).ConfigureAwait(false))
+		foreach (var it in Fsentry.Enumerate(baseDir))
 		{
 
 			if (it is Fsentry.EnterDir enterDir)
@@ -162,11 +163,8 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 			}
 			else if (it is Fsentry.Error error)
 			{
-				if (error.Exception is Fsentry.EnumerationException ex)
-				{
-					Console.WriteLine($"error in directory: " + ex.DirPathString);
-					Console.WriteLine("cause: " + (ex.InnerException?.Message ?? "no idea..."));
-				}
+				Console.WriteLine($"error in directory: " + error.DirPathString);
+				Console.WriteLine("cause: " + (error.Exception?.Message ?? "no idea..."));
 			}
 		}
 
@@ -174,15 +172,17 @@ Files and directories enumeration utility. Supports [Asynchronous streams](https
 	}
 ```
 
+Some more examples: [./src/Tkuri2010.Fsuty.Xmp/FsentryExample.cs](./src/Tkuri2010.Fsuty.Xmp/FsentryExample.cs)
+
 
 ## class `Fsinfo` (namespace `Tkuri2010.Fsuty`)
 
 Enumerates file system entries, as `System.IO.DirectoryInfo` or `System.IO.FileInfo`.
 
 ```cs
-async Task DoMyWorkAsync(Filepath baseDir, CancellationToken ct = default)
+void DoMyWork(Filepath baseDir)
 {
-	await foreach (var it in Fsinfo.EnumerateAsync(baseDir, ct).ConfigureAwait(false))
+	foreach (var it in Fsinfo.Enumerate(baseDir))
 	{
 		if (it is Fsinfo.EnterDir enterDir)
 		{
@@ -195,7 +195,7 @@ async Task DoMyWorkAsync(Filepath baseDir, CancellationToken ct = default)
 			Console.WriteLine($"leave dir: {leaveDir.Info.Name}");
 			// ...
 		}
-		else if (it is Fsinfo.File file))
+		else if (it is Fsinfo.File file)
 		{
 			// file.Info is a `System.IO.FileInfo` here.
 			Console.WriteLine($"file: {file.Info.Name}");
@@ -207,6 +207,9 @@ async Task DoMyWorkAsync(Filepath baseDir, CancellationToken ct = default)
 	}
 }
 ```
+
+Some more examples: [./src/Tkuri2010.Fsuty.Xmp/FsinfoExample.cs](./src/Tkuri2010.Fsuty.Xmp/FsinfoExample.cs)
+
 
 ## (side-product) class `LinkedCollection<E>` (namespace `Tkuri2010.Fsuty`)
 

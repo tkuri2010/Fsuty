@@ -219,3 +219,9 @@ https://github.com/dotnet/runtime/issues/64103
 | 新しい版 |  184,792,288           | 16.3     | 17,996,952 |
 
 global.json の SDK が 5.0 だったのを 6.0 に変えた成果もあるかも知れないけど、速くなった。新しい版も変わらず「遜色なし」と言えそう。
+
+
+## 2024/5月 EnumerateAsync をやめて同期的な Enumerate に
+
+してみたが、性能の向上はほぼ無し。`CancellationToken` のチェックも不要になったのに、なぜ。。。
+

@@ -1,37 +1,37 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Linq;
+using Tkuri2010.Fsuty.Detail;
 
 
 namespace Tkuri2010.Fsuty
 {
-	public abstract class Fsentry
+	/// <summary>
+	/// enumerates file system entries.
+	/// </summary>
+	public class Fsentry
 	{
 		/// <summary>
 		/// enumerates all file system entries, recursivery
 		/// </summary>
-		/// <param name="basePath"></param>
-		/// <param name="ct"></param>
+		/// <param name="basePath">directory path</param>
+		/// <param name="enumMode">specifies enumeration order (unordered files and dirs, dirs then files, or files then dirs) and search pattern </param>
 		/// <returns></returns>
-		public static IAsyncEnumerable<IEntry> EnumerateAsync(Filepath basePath, CancellationToken ct = default)
+		public static IEnumerable<IEntry> Enumerate(Filepath basePath, IMode? enumMode = null)
 		{
-			return EnumerateAsync(basePath.ToString(), ct);
+			return Enumerate(basePath.ToString(), enumMode);
 		}
 
 
 		/// <summary>
 		/// enumerates all file system entries, recursivery
 		/// </summary>
-		/// <param name="basePath"></param>
-		/// <param name="ct"></param>
+		/// <param name="basePath">directory path</param>
+		/// <param name="enumMode">specifies enumeration order (unordered files and dirs, dirs then files, or files then dirs) and search pattern </param>
 		/// <returns></returns>
-		public static async IAsyncEnumerable<IEntry> EnumerateAsync(string basePath, [EnumeratorCancellation] CancellationToken ct = default)
+		public static IEnumerable<IEntry> Enumerate(string basePath, IMode? enumMode = null)
 		{
-			var y = new Detail.SimpleYielder();
+			enumMode ??= NaturalOrder();
 
 			var stack = new Stack<IEntry>();
 
@@ -40,70 +40,35 @@ namespace Tkuri2010.Fsuty
 
 			do
 			{
-				#region Fill-Stack
 				try
 				{
-					#if false
-					// REJECT: こんな事をして列挙作業を別々にしても、却ってパフォーマンスは 2～3% くらい（ごくわずかだけど）下がる
-					var filesAsync = Task.Run(() => Directory.EnumerateFiles(currentDirPath));
-					var dirsAsync = Task.Run(() => Directory.EnumerateDirectories(currentDirPath));
-					#endif
-
-					foreach (var file in Directory.EnumerateFiles(currentDirPath))
-					{
-						if (y.Countup())
-						{
-							await y.YieldAsync(); // YieldAwaitable には ConfigureAwait() は存在しないらしい
-							ct.ThrowIfCancellationRequested();
-						}
-
-						stack.Push(new File(file, Resolve(currentDirRelPath, file)));
-					}
-
-					foreach (var dir in Directory.EnumerateDirectories(currentDirPath))
-					{
-						if (y.Countup())
-						{
-							await y.YieldAsync();
-							ct.ThrowIfCancellationRequested();
-						}
-
-						stack.Push(new EnterDir(dir, Resolve(currentDirRelPath, dir)));
-					}
+					enumMode.FillStack(stack, currentDirPath, currentDirRelPath);
 				}
 				catch (Exception x)
 				{
-					stack.Push(new Error(new EnumerationException(currentDirPath, currentDirRelPath, x)));
+					stack.Push(new Error(x, currentDirPath, currentDirRelPath));
 				}
-				#endregion
 
-				while (stack.TryPop(out var someEntry))
+				while (stack.XTryPop(out var someEntry))
 				{
-					yield return someEntry;
+					yield return someEntry!;
 
-					if (someEntry.Reaction == FseventInternalReaction.LeaveParentDir)
+					if (someEntry!.Reaction == InternalReaction.LeaveParentDir)
 					{
-						#region Leave-Parent-Dir
-						for (; ; )
-						{
-							if (! stack.TryPeek(out var e))
-							{
-								yield break;
-							}
+						stack.XPopWhile(it => it is not LeaveDir);
 
-							if (e is LeaveDir)
-							{
-								break;
-							}
-							else
-							{
-								stack.Pop();
-							}
+						if (stack.Any())
+						{
+							// Assert: stack.Peek() is LeaveDir;
+							continue;
 						}
-						#endregion
+						else
+						{
+							yield break;
+						}
 					}
 
-					if (someEntry.Reaction != FseventInternalReaction.Advance)
+					if (someEntry.Reaction != InternalReaction.Advance)
 					{
 						continue;
 					}
@@ -120,13 +85,108 @@ namespace Tkuri2010.Fsuty
 					break;
 				}
 			}
-			while (stack.Count >= 1);
+			while (stack.Any());
 		}
 
 
-		static Filepath Resolve(Filepath relativeParentDir, string fullPath)
+		/// <summary>
+		/// In each directory, enumerates files and dirs in undefined order,
+		/// Internally it uses the `Directory.EnumerateFileSystemEntries()` method for enumeration.
+		/// </summary>
+		/// <param name="searchPattern">
+		///   item name pattern. Enumerates all items when this parameter is null.
+		///   See <see href="https://learn.microsoft.com/en-us/dotnet/api/system.io.directory.enumeratefilesystementries#system-io-directory-enumeratefilesystementries(system-string-system-string)">
+		///     `System.Io.Directory.EnumerateFileSystemEntries()` parameter - `searchPattern`
+		///   </see> for more detail.
+		/// </param>
+		public static IMode NaturalOrder(string? searchPattern = null)
 		{
-			return relativeParentDir.Combine(Filepath.Parse(Path.GetFileName(fullPath)).Items);
+			return new FsentryDetails.NaturalOrderMode(searchPattern);
+		}
+
+
+		/// <summary>
+		/// In each directory, first enumerates dirs, then files.
+		/// Internally it uses the `Directory.EnumerateDirectories()` method followed by the `Directory.EnumerateFiles()` method for enumeration.
+		/// </summary>
+		/// <param name="searchPattern">
+		///   item name pattern. Enumerates all items when this parameter is null.
+		///   See <see href="https://learn.microsoft.com/en-us/dotnet/api/system.io.directory.enumeratedirectories#system-io-directory-enumeratedirectories(system-string-system-string)">
+		///     `System.Io.Directory.EnumerateDirectories()` parameter - `searchPattern`
+		///   </see> for more detail.
+		/// </param>
+		public static IMode DirsThenFiles(string? searchPattern)
+		{
+			return new FsentryDetails.DirsThenFilesMode(searchPattern, searchPattern);
+		}
+
+
+		/// <summary>
+		/// In each directory, first enumerates dirs, then files.
+		/// Internally it uses the `Directory.EnumerateDirectories()` method followed by the `Directory.EnumerateFiles()` method for enumeration.
+		/// </summary>
+		/// <param name="dirPattern">
+		///   dir name pattern. Enumerates all dirs when this parameter is null.
+		///   See <see href="https://learn.microsoft.com/en-us/dotnet/api/system.io.directory.enumeratedirectories#system-io-directory-enumeratedirectories(system-string-system-string)">
+		///     `System.Io.Directory.EnumerateDirectories()` parameter - `searchPattern`
+		///   </see> for more detail.
+		/// </param>
+		/// <param name="filePattern">
+		///   file name pattern. Enumerates all files when this parameter is null.
+		///   See <see href="https://learn.microsoft.com/en-us/dotnet/api/system.io.directory.enumeratefiles#system-io-directory-enumeratefiles(system-string-system-string)">
+		///     `System.Io.Directory.EnumerateFiles()` parameter - `searchPattern`
+		///   </see> for more detail.
+		/// </param>
+		public static IMode DirsThenFiles(string? dirPattern = null, string? filePattern = null)
+		{
+			return new FsentryDetails.DirsThenFilesMode(dirPattern: dirPattern, filePattern: filePattern);
+		}
+
+
+		/// <summary>
+		/// In each directory, first enumerates files, then dirs.
+		/// Internally it uses the `Directory.EnumerateFiles()` method followed by the `Directory.EnumerateDirectories()` method for enumeration.
+		/// </summary>
+		/// <param name="searchPattern">
+		///   item name pattern. Enumerates all items when this parameter is null.
+		///   See <see href="https://learn.microsoft.com/en-us/dotnet/api/system.io.directory.enumeratefiles#system-io-directory-enumeratefiles(system-string-system-string)">
+		///     `System.Io.Directory.EnumerateFiles()` parameter - `searchPattern`
+		///   </see> for more detail.
+		/// </param>
+		public static IMode FilesThenDirs(string? searchPattern)
+		{
+			return new FsentryDetails.FilesThenDirsMode(searchPattern, searchPattern);
+		}
+
+
+		/// <summary>
+		/// In each directory, first enumerates files, then dirs.
+		/// Internally it uses the `Directory.EnumerateFiles()` method followed by the `Directory.EnumerateDirectories()` method for enumeration.
+		/// </summary>
+		/// <param name="filePattern">
+		///   file name pattern. Enumerates all files when this parameter is null.
+		///   See <see href="https://learn.microsoft.com/en-us/dotnet/api/system.io.directory.enumeratefiles#system-io-directory-enumeratefiles(system-string-system-string)">
+		///     `System.Io.Directory.EnumerateFiles()` parameter - `searchPattern`
+		///   </see> for more detail.
+		/// </param>
+		/// <param name="dirPattern">
+		///   dir name pattern. Enumerates all dirs when this parameter is null.
+		///   See <see href="https://learn.microsoft.com/en-us/dotnet/api/system.io.directory.enumeratedirectories#system-io-directory-enumeratedirectories(system-string-system-string)">
+		///     `System.Io.Directory.EnumerateDirectories()` parameter - `searchPattern`
+		///   </see> for more detail.
+		/// </param>
+		public static IMode FilesThenDirs(string? filePattern = null, string? dirPattern = null)
+		{
+			return new FsentryDetails.FilesThenDirsMode(filePattern: filePattern, dirPattern: dirPattern);
+		}
+
+
+		/// <summary>
+		/// enumeration mode
+		/// </summary>
+		public interface IMode
+		{
+			void FillStack(Stack<IEntry> stack, string currentDirPath, Filepath currentRelPath);
 		}
 
 
@@ -134,7 +194,7 @@ namespace Tkuri2010.Fsuty
 		public interface IEntry
 		{
 			/// <summary>(internal use only)</summary>
-			FseventInternalReaction Reaction { get; }
+			InternalReaction Reaction { get; }
 
 
 			/// <summary>
@@ -171,7 +231,7 @@ namespace Tkuri2010.Fsuty
 			public Filepath RelativePath { get; private set; }
 
 
-			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
+			public InternalReaction Reaction { get; internal set; } = InternalReaction.Advance;
 
 
 			/// <summary>
@@ -188,7 +248,7 @@ namespace Tkuri2010.Fsuty
 
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.LeaveParentDir;
+				Reaction = InternalReaction.LeaveParentDir;
 			}
 
 
@@ -197,7 +257,7 @@ namespace Tkuri2010.Fsuty
 			/// </summary>
 			public void Skip()
 			{
-				Reaction = FseventInternalReaction.SkipEnterDir;
+				Reaction = InternalReaction.SkipEnterDir;
 			}
 		}
 
@@ -211,7 +271,7 @@ namespace Tkuri2010.Fsuty
 
 			public Filepath RelativePath { get; private set; }
 
-			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
+			public InternalReaction Reaction { get; internal set; } = InternalReaction.Advance;
 
 			/// <summary>
 			/// (do not call directly)
@@ -237,7 +297,7 @@ namespace Tkuri2010.Fsuty
 
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.LeaveParentDir;
+				Reaction = InternalReaction.LeaveParentDir;
 			}
 		}
 
@@ -251,7 +311,7 @@ namespace Tkuri2010.Fsuty
 
 			public Filepath RelativePath { get; private set; }
 
-			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
+			public InternalReaction Reaction { get; internal set; } = InternalReaction.Advance;
 
 			/// <summary>
 			/// (do not call directly)
@@ -266,7 +326,7 @@ namespace Tkuri2010.Fsuty
 
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.LeaveParentDir;
+				Reaction = InternalReaction.LeaveParentDir;
 			}
 		}
 
@@ -280,146 +340,38 @@ namespace Tkuri2010.Fsuty
 			/// Thrown exception object (if available).
 			/// Typically it may be an EnumerationException,
 			/// </summary>
-			public Exception? Exception { get; private set; }
-
-
-			public FseventInternalReaction Reaction { get; internal set; } = FseventInternalReaction.Advance;
+			public Exception Exception { get; internal set; }
 
 
 			/// <summary>
-			/// (do not call directly)
+			/// The directory path that tried to enumerate items. May be absolute, or may be relative.
 			/// </summary>
-			/// <param name="exception">thrown exception object</param>
-			public Error(Exception exception)
+			public string DirPathString { get; internal set; }
+
+
+			/// <summary>
+			/// The relative path from Fsentry.Enumerate(HERE) of the `DirPathString`. May be Empty.
+			/// </summary>
+			public Filepath DirRelativePath { get; internal set; }
+
+
+			public InternalReaction Reaction { get; internal set; } = InternalReaction.Advance;
+
+
+			/// <summary>(internal use only)</summary>
+			public Error(Exception exception, string dirPath, Filepath relativePath)
 			{
 				Exception = exception;
+				DirPathString = dirPath;
+				DirRelativePath = relativePath;
 			}
 
 
 			public void LeaveParentDir()
 			{
-				Reaction = FseventInternalReaction.LeaveParentDir;
+				Reaction = InternalReaction.LeaveParentDir;
 			}
 		}
-
-
-		/// <summary>
-		/// Some error while enumerating file system items.
-		/// Typically, this instance has InnerException for detail.
-		/// </summary>
-		public class EnumerationException : Exception
-		{
-			/// <summary>
-			/// The directory path that tried to enumerate items. May be absolute, or may be relative.
-			/// </summary>
-			public string DirPathString { get; private set; }
-
-
-			/// <summary>
-			/// The relative path from Fsentry.EnumerateAsync(HERE) of the `DirPathString`. May be Empty.
-			/// </summary>
-			public Filepath DirRelativePath { get; private set; }
-
-
-			public EnumerationException(string dirPath, Filepath relativePath, Exception innerException)
-				: base($"File entry enumeration failed for dir {dirPath}", innerException)
-			{
-				DirPathString = dirPath;
-				DirRelativePath = relativePath;
-			}
-		}
-
 	}
-
-
-	/// <summary>(internal use)</summary>
-	public enum FseventInternalReaction
-	{
-		Advance = 0,
-
-		LeaveParentDir = 1,
-
-		SkipEnterDir = 2,
-	}
-
-
-#if false
-	public class FsentryError : Fsentry
-	{
-		public Exception? Error { get; private set; } = null;
-
-
-		public FsentryError(Exception? error = null)
-		{
-			Error = error;
-		}
-	}
-
-
-	public abstract class FsentrySuccess : Fsentry
-	{
-		/// <summary>Raw result value from `System.IO.Directory.Enum***()` </summary>
-		public string FullPathString { get; private set; } = string.Empty;
-
-		public Filepath RelativePath { get; private set; } = Filepath.Empty;
-
-		protected FsentrySuccess(string fullPath, Filepath relativeParentDir)
-		{
-			FullPathString = fullPath;
-			RelativePath = relativeParentDir.Combine(Filepath.Parse(Path.GetFileName(fullPath)).Items);
-		}
-
-		/// <summary>
-		/// (just copying)
-		/// </summary>
-		protected FsentrySuccess(FsentrySuccess entry)
-		{
-			FullPathString = entry.FullPathString;
-			RelativePath = entry.RelativePath;
-		}
-	}
-
-
-	/// <summary>
-	/// A dir found, will enter.
-	/// </summary>
-	public class FsentryEnterDir : FsentrySuccess
-	{
-		public FsentryEnterDir(string fullPath, Filepath relativeParentDir)
-				: base(fullPath, relativeParentDir)
-		{
-		}
-
-
-		public void Skip()
-		{
-			mReaction = FseventInternalReaction.SkipEnterDir;
-		}
-	}
-
-
-	/// <summary>
-	/// Leaving the dir.
-	/// </summary>
-	public class FsentryLeaveDir : FsentrySuccess
-	{
-		public FsentryLeaveDir(FsentryEnterDir enterDir)
-				: base(enterDir)
-		{
-		}
-	}
-
-
-	/// <summary>
-	/// A file found.
-	/// </summary>
-	public class FsentryFile : FsentrySuccess
-	{
-		public FsentryFile(string fullPath, Filepath relativeParentDir)
-				: base(fullPath, relativeParentDir)
-		{
-		}
-	}
-#endif
 }
 

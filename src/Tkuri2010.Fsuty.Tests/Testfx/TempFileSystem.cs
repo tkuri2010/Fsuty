@@ -17,9 +17,9 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		/// <summary>
 		/// 相対パスのリストを指定してインスタンスを取得
 		/// </summary>
-		public static async ValueTask<TempFileSystem> NewAsync(params string[] initialRelativePaths)
+		public static async ValueTask<TempFileSystem> NewAsync(TestContext? testContext,  params string[] initialRelativePaths)
 		{
-			var self = new TempFileSystem();
+			var self = new TempFileSystem(testContext);
 
 			var properPaths = Ext.FillOmittedLines(initialRelativePaths)
 					.Select(it => it.Replace(" ", ""));
@@ -38,7 +38,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		{
 			return Filepath.Parse(Path.GetTempPath())
 					.Canonicalize()
-					.Also(AssertSafeTempPath);
+					.XAlso(AssertSafeTempPath);
 		}
 
 
@@ -48,7 +48,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		{
 			var errorMessage = $"The path is not safe for use in testing: {tempPath}";
 
-			if (! tempPath.IsAbsolute) throw new Exception(errorMessage);
+			if (! tempPath.IsFromRoot) throw new Exception(errorMessage);
 			if (! (tempPath.Items.Count >= 1)) throw new Exception(errorMessage);
 
 			bool containsTempName = tempPath.Items.Any(it =>
@@ -61,11 +61,11 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		}
 
 
-		public static Filepath CreateSafeTempDir()
+		public static Filepath CreateSafeTempDir(TestContext? testContext)
 		{
 			var tempBase = Filepath.Parse(Path.GetTempPath())
 					.Canonicalize()
-					.Also(AssertSafeTempPath);
+					.XAlso(AssertSafeTempPath);
 
 			Filepath rv = Filepath.Empty;
 			bool ok = false;
@@ -73,7 +73,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 			{
 				var random = $"{Ext.RandomChar()}{Ext.RandomChar()}{Ext.RandomChar()}";
 				rv = tempBase.Combine(_AsItems("FsutyTestDir_" + DateTime.Now.ToString("HHmmss") + "_" + random))
-						.Also(AssertSafeTempPath);
+						.XAlso(AssertSafeTempPath);
 				var pathString = rv.ToString();
 				lock (_CreatingDirLock)
 				{
@@ -83,7 +83,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 					}
 					else
 					{
-						StaticTestContext.WriteLine($"using tempdir {pathString}");
+						testContext?.WriteLine($"using tempdir {pathString}");
 						Directory.CreateDirectory(pathString);
 						ok = true;
 						break;
@@ -106,9 +106,13 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		private List<string> m_properPaths = new();
 
 
-		public TempFileSystem()
+		private TestContext? m_testContext;
+
+
+		public TempFileSystem(TestContext? testContext)
 		{
-			TempDir = CreateSafeTempDir();
+			m_testContext = testContext;
+			TempDir = CreateSafeTempDir(testContext);
 		}
 
 
@@ -116,7 +120,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		/// NewAsync() の引数に入力されたパスで、省略部分が埋められたり、余分な空白が削除されたりしてあるもの。
 		/// </summary>
 		/// <returns></returns>
-		public IEnumerable<string> GetPropertPaths()
+		public IEnumerable<string> GetProperPaths()
 		{
 			return m_properPaths;
 		}
@@ -130,7 +134,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		{
 			var relPath = Filepath.Parse(relativePath);
 			if (relPath.Prefix is not PathPrefix.None) throw new Exception($"Preparing Test Failed: The argument must not have any prefixes (drive letter, server name...): {relativePath}");
-			if (relPath.IsAbsolute) throw new Exception($"Preparing Test Failed: must be relative path: {relativePath}");
+			if (relPath.IsFromRoot) throw new Exception($"Preparing Test Failed: must be relative path: {relativePath}");
 
 			if (relPath.HasExtension)
 			{
@@ -147,7 +151,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		{
 			var absPath = TempDir.Combine(relativePath.Items)
 					.Canonicalize()
-					.Also(AssertSafeTempPath);
+					.XAlso(AssertSafeTempPath);
 
 			Directory.CreateDirectory(absPath.ToString());
 		}
@@ -157,7 +161,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		{
 			var absPath = TempDir.Combine(relativePath.Items)
 					.Canonicalize()
-					.Also(AssertSafeTempPath);
+					.XAlso(AssertSafeTempPath);
 
 			Directory.CreateDirectory(absPath.Parent.ToString());
 
@@ -169,7 +173,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		{
 			var full = TempDir.Combine(relativePath.Items)
 					.Canonicalize()
-					.Also(AssertSafeTempPath)
+					.XAlso(AssertSafeTempPath)
 					.ToString();
 
 			if (Directory.Exists(full))
@@ -182,7 +186,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 			}
 			else
 			{
-				StaticTestContext.WriteLine($"Not exist: {relativePath}");
+				m_testContext?.WriteLine($"Not exist: {relativePath}");
 			}
 		}
 
@@ -190,13 +194,13 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		public void Delete(string path)
 		{
 			var pathobj = Filepath.Parse(path);
-			if (! pathobj.IsAbsolute)
+			if (! pathobj.IsFromRoot)
 			{
 				pathobj = TempDir.Combine(pathobj.Items);
 			}
 
 			var full = pathobj.Canonicalize()
-					.Also(AssertSafeTempPath)
+					.XAlso(AssertSafeTempPath)
 					.ToString();
 
 			if (Directory.Exists(full))
@@ -209,7 +213,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 			}
 			else
 			{
-				StaticTestContext.WriteLine($"not exist: {path}");
+				m_testContext?.WriteLine($"not exist: {path}");
 			}
 		}
 
@@ -237,7 +241,7 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 	internal static class Ext
 	{
 		/// <summary> (same as Kotlin) </summary>
-		internal static TSelf Also<TSelf>(this TSelf self, Action<TSelf> action)
+		internal static TSelf XAlso<TSelf>(this TSelf self, Action<TSelf> action)
 		{
 			action(self);
 			return self;
