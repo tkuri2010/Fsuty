@@ -6,10 +6,10 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+
 
 namespace Tkuri2010.Fsuty
 {
@@ -17,11 +17,11 @@ namespace Tkuri2010.Fsuty
 	public interface IFilepathParser
 	{
 		/// <summary>Unix style file path parser. You can set this to Filepath.CurrentParser property.</summary>
-		public static IFilepathParser Unix => Internal.UnixFilepathParser.Instance;
+		// public static IFilepathParser Unix => Internal.UnixFilepathParser.Instance;
 
 
 		/// <summary>Win32 style file path parser. You can set this to Filepath.CurrentParser property.</summary>
-		public static IFilepathParser Win32 => Internal.Win32FilepathParser.Instance;
+		// public static IFilepathParser Win32 => Internal.Win32FilepathParser.Instance;
 
 
 		Filepath Parse(string? path);
@@ -155,6 +155,17 @@ namespace Tkuri2010.Fsuty
 	/// <summary>File path descriptor</summary>
     public class Filepath
     {
+		public static class Parser
+		{
+			/// <summary>Unix style file path parser. You can set this to Filepath.CurrentParser property.</summary>
+			public static IFilepathParser Unix => Internal.UnixFilepathParser.Instance;
+
+
+			/// <summary>Win32 style file path parser. You can set this to Filepath.CurrentParser property.</summary>
+			public static IFilepathParser Win32 => Internal.Win32FilepathParser.Instance;
+		}
+
+
 		public enum Style
 		{
 			_Unknown,
@@ -247,7 +258,10 @@ namespace Tkuri2010.Fsuty
 		public IPathPrefix Prefix { get; internal set; } = PathPrefix.None.Instance;
 
 
-		public bool IsAbsolute { get; internal set; } = false;
+		/// <summary>
+		/// Represents the path is from root or not.
+		/// </summary>
+		public bool IsFromRoot { get; internal set; } = false;
 
 
 		public PathItems Items { get; internal set; } = PathItems.Empty;
@@ -312,7 +326,7 @@ namespace Tkuri2010.Fsuty
 		public string ToString(char directorySeparatorChar)
 		{
 			return Prefix.ToString()
-					+ (IsAbsolute ? directorySeparatorChar : "")
+					+ (IsFromRoot ? directorySeparatorChar : "")
 					+ Items.ToString(directorySeparatorChar);
 		}
 
@@ -327,7 +341,7 @@ namespace Tkuri2010.Fsuty
 			return new Filepath
 			{
 				Prefix = this.Prefix,
-				IsAbsolute = this.IsAbsolute,
+				IsFromRoot = this.IsFromRoot,
 				Items = this.Items.CombineItems(items),
 			};
 		}
@@ -354,8 +368,8 @@ namespace Tkuri2010.Fsuty
 			{
 				Prefix = this.Prefix,
 
-				// 開始位置が 0 であれば、this.IsAbsolute を踏襲。そうでなければ常に相対パスとなる
-				IsAbsolute = (fixedHead == 0) ? this.IsAbsolute : false,
+				// 開始位置が 0 であれば、this.IsFromRoot を踏襲。そうでなければ常に相対パスとなる
+				IsFromRoot = (fixedHead == 0) ? this.IsFromRoot : false,
 
 				Items = Items.SliceItems(start, count),
 			};
@@ -389,7 +403,7 @@ namespace Tkuri2010.Fsuty
 			return new Filepath
 			{
 				Prefix = Prefix,
-				IsAbsolute = IsAbsolute,
+				IsFromRoot = IsFromRoot,
 				Items = Items.CanonicalizeItems(),
 			};
 		}
@@ -743,6 +757,20 @@ namespace Tkuri2010.Fsuty.PathPrefix
 		/// <returns></returns>
 		override public string ToString() => Drive;
 	}
+
+
+	/// <summary>
+	/// FIXME: FAKE! (since .NET Standard 2.1, System.Diagnostics.CodeAnalysis)
+	/// </summary>
+	internal class NotNullWhenAttribute : Attribute
+	{
+		/// <summary>
+		/// FIXME: FAKE!
+		/// </summary>
+		/// <param name="_b"></param>
+		internal NotNullWhenAttribute(bool _b) {}
+	}
+
 }
 
 
@@ -860,13 +888,13 @@ namespace Tkuri2010.Fsuty.Internal
 		}
 
 
-		public static string JoinString(char separator, IEnumerable<object> values)
-		{
-			return string.Join(separator, values);
-		}
+		//public static string JoinString(char separator, IEnumerable<object> values)
+		//{
+		//	return string.Join(separator.ToString(), values);
+		//}
 
 
-		public static string JoinString(char separator, LinkedCollection<object> values)
+		public static string JoinString(char separator, LinkedCollection<string> values)
 		{
 			var builder = new StringBuilder();
 
@@ -999,6 +1027,10 @@ namespace Tkuri2010.Fsuty.Internal
 
 		public static IPathPrefix ParseWin32PathPrefix(FilepathScanner aScan)
 		{
+			// FIXME 以下の TryParse() の out 引数は null にはならないが、
+			// .NET Standard 2.0 では NotNullWhenAttribute が存在しないため、コンパイラは warn を出してしまう。
+			// .NET Standard 2.1 以降であれば解決する。
+			#pragma warning disable CS8603
 			if (PathPrefix.Dos.TryParse(aScan, out var traDos))
 			{
 				return traDos;
@@ -1023,6 +1055,7 @@ namespace Tkuri2010.Fsuty.Internal
 			{
 				return PathPrefix.None.Instance;
 			}
+			#pragma warning restore CS8603
 		}
 	}
 
@@ -1039,11 +1072,14 @@ namespace Tkuri2010.Fsuty.Internal
 				return Filepath.Empty;
 			}
 
+			// FIXME .NET Standard 2.1 以降であればコンパイラは path が null でない事を理解してくれる
+			#pragma warning disable CS8604
 			var scan = new Internal.FilepathScanner(path);
+			#pragma warning restore CS8604
 
 			var self = new Filepath();
 			self.Prefix = PathPrefix.None.Instance;
-			self.IsAbsolute = scan.Skip(FilepathParsingHelper.SeparatingPattern);
+			self.IsFromRoot = scan.Skip(FilepathParsingHelper.SeparatingPattern);
 			self.Items = new(FilepathParsingHelper.ParsePath(scan));
 			return self;
 		}
@@ -1062,11 +1098,15 @@ namespace Tkuri2010.Fsuty.Internal
 				return Filepath.Empty;
 			}
 
+			// FIXME .NET Standard 2.1 以降であればコンパイラは path が null でない事を理解してくれる
+			#pragma warning disable CS8604
 			var scan = PrepareScanner(path);
+			#pragma warning restore CS8604
+
 
 			var self = new Filepath();
 			self.Prefix = FilepathParsingHelper.ParseWin32PathPrefix(scan);
-			self.IsAbsolute = scan.Skip(FilepathParsingHelper.SeparatingPattern);
+			self.IsFromRoot = scan.Skip(FilepathParsingHelper.SeparatingPattern);
 			self.Items = new(FilepathParsingHelper.ParsePath(scan));
 			return self;
 		}
@@ -1077,4 +1117,6 @@ namespace Tkuri2010.Fsuty.Internal
 			return new FilepathScanner(inputPath.Replace('\\', '/'));
 		}
 	}
+
 }
+

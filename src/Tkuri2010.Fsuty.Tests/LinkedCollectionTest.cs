@@ -117,7 +117,7 @@ namespace Tkuri2010.Fsuty.Tests
 
 			var slice = c.Slice(0, 10);
 
-			Assert.AreEqual(10, c.Count);
+			Assert.AreEqual(10, slice.Count);
 		}
 
 

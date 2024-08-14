@@ -13,7 +13,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public void Test_Simple_WithBackSlashes()
 		{
 			var path = Filepath.Parse(@"a/\/b///c/\/\/");
-			Assert.IsFalse(path.IsAbsolute);
+			Assert.IsFalse(path.IsFromRoot);
 			Assert.AreEqual(3, path.Items.Count);
 			Assert.AreEqual("c", path.Items[2]);
 		}
@@ -28,7 +28,7 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.IsNotNull(prefix);
 				Assert.AreEqual("c:", prefix!.Drive);
 				Assert.AreEqual("C", prefix!.DriveLetter.ToUpper());
-				Assert.IsFalse(path.IsAbsolute);
+				Assert.IsFalse(path.IsFromRoot);
 				Assert.AreEqual(0, path.Items.Count);
 			}
 
@@ -39,7 +39,7 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.IsNotNull(prefix);
 				Assert.AreEqual("z:", prefix!.Drive);
 				Assert.AreEqual("Z", prefix!.DriveLetter.ToUpper());
-				Assert.IsTrue(path.IsAbsolute);
+				Assert.IsTrue(path.IsFromRoot);
 				Assert.AreEqual(0, path.Items.Count);
 			}
 		}
@@ -51,7 +51,7 @@ namespace Tkuri2010.Fsuty.Tests
 			Action<string> test_ = pathStr =>
 			{
 				var path = Filepath.Parse(pathStr);
-				Assert.IsTrue(path.IsAbsolute);
+				Assert.IsTrue(path.IsFromRoot);
 				Assert.AreEqual(1, path.Items.Count);
 			};
 
@@ -68,13 +68,13 @@ namespace Tkuri2010.Fsuty.Tests
 		{
 			{
 				var path = Filepath.Parse(@"c:a\b\");
-				Assert.IsFalse(path.IsAbsolute);
+				Assert.IsFalse(path.IsFromRoot);
 				Assert.AreEqual(2, path.Items.Count);
 			}
 
 			{
 				var path = Filepath.Parse(@"c:a\b.txt");
-				Assert.IsFalse(path.IsAbsolute);
+				Assert.IsFalse(path.IsFromRoot);
 				Assert.AreEqual(2, path.Items.Count);
 			}
 		}
@@ -230,7 +230,7 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.IsInstanceOfType(path.Prefix, typeof(PathPrefix.Dos));
 				Assert.AreEqual((path.Prefix as PathPrefix.Dos)!.DriveLetter.ToLower(), "c");
 
-				Assert.IsTrue(path.IsAbsolute);
+				Assert.IsTrue(path.IsFromRoot);
 				Assert.AreEqual("home", path.Items[0]);
 				Assert.AreEqual("baz.txt", path.Items[4]);
 			}
@@ -240,7 +240,7 @@ namespace Tkuri2010.Fsuty.Tests
 				Assert.IsInstanceOfType(path.Prefix, typeof(PathPrefix.Dos));
 				Assert.AreEqual((path.Prefix as PathPrefix.Dos)!.DriveLetter.ToLower(), "c");
 
-				Assert.IsFalse(path.IsAbsolute);
+				Assert.IsFalse(path.IsFromRoot);
 				Assert.AreEqual("kuma", path.Items[0]);
 				Assert.AreEqual("baz.txt", path.Items[3]);
 			}

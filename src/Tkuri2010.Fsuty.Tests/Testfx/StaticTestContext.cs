@@ -1,3 +1,4 @@
+#if false
 using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -58,3 +59,4 @@ namespace Tkuri2010.Fsuty.Tests.Testfx
 		}
 	}
 }
+#endif

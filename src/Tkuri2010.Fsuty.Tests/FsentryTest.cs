@@ -1,4 +1,5 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,7 +11,7 @@ namespace Tkuri2010.Fsuty.Tests
 	[TestClass]
 	public class FsentryTest
 	{
-		public TestContext TestContext { get; set; } = default!;
+		public TestContext? TestContext { get; set; } = default;
 
 
 		static void RemoveMatched(HashSet<string> set, string fullName)
@@ -27,9 +28,8 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public async Task Spec_SimpleUsage_Async()
 		{
-			using var stc = new StaticTestContext(TestContext);
-
 			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
 				"file0.txt",
 				"dir1",
 				"     / file1-1.txt",
@@ -41,24 +41,24 @@ namespace Tkuri2010.Fsuty.Tests
 			int leaveDirCount = 0;
 			int fileCount = 0;
 
-			await foreach (var info in Fsentry.EnumerateAsync(fs.TempDir))
+			foreach (var info in Fsentry.Enumerate(fs.TempDir))
 			{
 				if (info is Fsentry.EnterDir enterDir)
 				{
 					// an event that means entering "dir1" or "dir1-2"
-					StaticTestContext.WriteLine(">> entering dir: " + enterDir.RelativePath);
+					TestContext?.WriteLine(">> entering dir: " + enterDir.RelativePath);
 					enterDirCount++;
 				}
 				else if (info is Fsentry.LeaveDir leaveDir)
 				{
 					// an event that means leaving "dir1" or "dir1-2"
-					StaticTestContext.WriteLine("<< leaving dir: " + leaveDir.RelativePath);
+					TestContext?.WriteLine("<< leaving dir: " + leaveDir.RelativePath);
 					leaveDirCount++;
 				}
 				else if (info is Fsentry.File file)
 				{
 					// a file found
-					StaticTestContext.WriteLine("   file: " + file.RelativePath);
+					TestContext?.WriteLine("   file: " + file.RelativePath);
 					fileCount++;
 				}
 				else if (info is Fsentry.Error x)
@@ -73,6 +73,149 @@ namespace Tkuri2010.Fsuty.Tests
 		}
 
 
+		[TestMethod]
+		public async Task Spec_EnumMode_Async()
+		{
+			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
+				"test-dir-1",
+				"test-file-1.txt",
+				"test-dir-2",
+				"test-file-2.txt",
+				"test-dir-3",
+				"test-file-3.txt"
+			);
+
+			#region enomMode = FilesThenDirs
+			{
+				var paths = new List<string>();
+
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.FilesThenDirs()))
+				{
+					if (e is Fsentry.EnterDir enterDir)
+					{
+						paths.Add(enterDir.FullPathString);
+					}
+					else if (e is Fsentry.File file)
+					{
+						paths.Add(file.FullPathString);
+					}
+				}
+
+				Assert.IsTrue(paths[0].Contains("test-file-"));
+				Assert.IsTrue(paths[1].Contains("test-file-"));
+				Assert.IsTrue(paths[2].Contains("test-file-"));
+				Assert.IsTrue(paths[3].Contains("test-dir-"));
+				Assert.IsTrue(paths[4].Contains("test-dir-"));
+				Assert.IsTrue(paths[5].Contains("test-dir-"));
+			}
+			#endregion
+
+			#region enumMode = DirsThenFiles
+			{
+				var paths = new List<string>();
+
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.DirsThenFiles()))
+				{
+					if (e is Fsentry.EnterDir enterDir)
+					{
+						paths.Add(enterDir.FullPathString);
+					}
+					else if (e is Fsentry.File file)
+					{
+						paths.Add(file.FullPathString);
+					}
+				}
+
+				Assert.IsTrue(paths[0].Contains("test-dir-"));
+				Assert.IsTrue(paths[1].Contains("test-dir-"));
+				Assert.IsTrue(paths[2].Contains("test-dir-"));
+				Assert.IsTrue(paths[3].Contains("test-file-"));
+				Assert.IsTrue(paths[4].Contains("test-file-"));
+				Assert.IsTrue(paths[5].Contains("test-file-"));
+			}
+			#endregion
+		}
+
+
+		/// <summary>
+		/// SPEC: How to specify search pattern, and enumerates in natural order / files-then-dirs / dirs-then-files
+		/// </summary>
+		/// <returns></returns>
+		[TestMethod]
+		public async Task Spec_SearchPattern_Async()
+		{
+			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
+				"yay_dir1",
+				"         / file1-1.txt",
+				"         / file1-2.txt",
+				"         / yay_file1-3.txt",
+				"dir2",
+				"    / yay_file2-1.txt",
+				"    / yay_file2-2.txt",
+				"yay_dir3",
+				"         / yay_file3-1.txt",
+				"         / yay_file3-2.txt"
+			);
+
+			#region enumerates only files and dirs named such as "yay_*"
+			{
+				var paths = new List<string>();
+
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.NaturalOrder(searchPattern: "yay_*")))
+				{
+					if (e is Fsentry.EnterDir dir)
+						paths.Add(dir.RelativePath.LastItem);
+					else if (e is Fsentry.File file)
+						paths.Add(file.RelativePath.LastItem);
+				}
+
+				Assert.AreEqual(paths.Count, 5);
+				Assert.IsTrue(paths.All(it => it.StartsWith("yay_")));
+			}
+			#endregion
+
+			#region enumerates all dirs, and only files named such as "yay_*"
+			{
+				var paths = new List<string>();
+
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.DirsThenFiles(dirPattern: null, filePattern: "yay_*")))
+				{
+					TestContext?.WriteLine(((Fsentry.ISuccess)e).FullPathString);
+
+					if (e is Fsentry.EnterDir dir)
+						paths.Add(dir.RelativePath.LastItem);
+					else if (e is Fsentry.File file)
+						paths.Add(file.RelativePath.LastItem);
+				}
+
+				Assert.AreEqual(paths.Count, 8);
+				Assert.IsTrue(paths.All(it => (it == "dir2") || it.StartsWith("yay_")));
+			}
+			#endregion
+
+			#region `Fsentry.FilesThenDirs()` enumerates files at first, and then dirs in each directory.
+			{
+				var paths = new List<string>();
+
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.FilesThenDirs(dirPattern: null, filePattern: "yay_*")))
+				{
+					TestContext?.WriteLine(((Fsentry.ISuccess)e).FullPathString);
+
+					if (e is Fsentry.EnterDir dir)
+						paths.Add(dir.RelativePath.LastItem);
+					else if (e is Fsentry.File file)
+						paths.Add(file.RelativePath.LastItem);
+				}
+
+				Assert.AreEqual(paths.Count, 8);
+				Assert.IsTrue(paths.All(it => (it == "dir2") || it.StartsWith("yay_")));
+			}
+			#endregion
+		}
+
+
 		/// <summary>
 		/// SPEC: How to use EnterDir.Skip(), and what will be happen.
 		/// </summary>
@@ -81,12 +224,13 @@ namespace Tkuri2010.Fsuty.Tests
 		public async Task Spec_Skip1_Async()
 		{
 			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
 				"dir1",
 				"     / file1-1.txt",
 				"     / file1-2.txt"
 			);
 
-			await foreach (var info in Fsentry.EnumerateAsync(fs.TempDir))
+			foreach (var info in Fsentry.Enumerate(fs.TempDir))
 			{
 				if (info is Fsentry.EnterDir enterDir)
 				{
@@ -112,6 +256,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public async Task Spec_LeaveParentDir_Async()
 		{
 			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
 				"dir1",
 				"     / file1-1.txt",
 				"     / file1-2.txt",
@@ -125,7 +270,7 @@ namespace Tkuri2010.Fsuty.Tests
 			int leaveDirCount = 0;
 			int fileCount = 0;
 
-			await foreach (var info in Fsentry.EnumerateAsync(fs.TempDir))
+			foreach (var info in Fsentry.Enumerate(fs.TempDir))
 			{
 				if (info is Fsentry.EnterDir)
 				{
@@ -159,9 +304,9 @@ namespace Tkuri2010.Fsuty.Tests
 		[TestMethod]
 		public async Task Test_Empty_Async()
 		{
-			using var fs = await TempFileSystem.NewAsync();
+			using var fs = await TempFileSystem.NewAsync(TestContext);
 
-			await foreach (var _ in Fsentry.EnumerateAsync(fs.TempDir))
+			foreach (var _ in Fsentry.Enumerate(fs.TempDir))
 			{
 				Assert.Fail("nothing must happen.");
 			}
@@ -171,23 +316,20 @@ namespace Tkuri2010.Fsuty.Tests
 
 
 		[TestMethod]
-		public async Task Test_TopLevelError_Async()
+		public void Test_TopLevelError()
 		{
 			int errorCount = 0;
 			int others = 0;
 
-			await foreach (var e in Fsentry.EnumerateAsync("xxx_does_not_exist_xxx"))
+			foreach (var e in Fsentry.Enumerate("xxx_does_not_exist_xxx"))
 			{
 				if (e is Fsentry.Error error)
 				{
 					errorCount++;
-					if (error.Exception is Fsentry.EnumerationException x)
-					{
-						StaticTestContext.WriteLine("processing dir:" + x.DirPathString);
-						//=> "xxx_does_not_exist_xxx"
-						StaticTestContext.WriteLine(error.Exception?.InnerException?.Message ?? "no idea..");
-						//=> "Could not find a part of the path...."
-					}
+					TestContext?.WriteLine("processing dir:" + error.DirPathString);
+					//=> "xxx_does_not_exist_xxx"
+					TestContext?.WriteLine(error.Exception?.Message ?? "no idea..");
+					//=> "Could not find a part of the path...."
 				}
 				else
 				{
@@ -204,6 +346,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public async Task Test_OnlyDeepDirs_Async()
 		{
 			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
 				"dir1 / dir1-2 / dir1-3",
 				"dir2 / dir2-2 / dir2-3"
 			);
@@ -213,7 +356,7 @@ namespace Tkuri2010.Fsuty.Tests
 			int fileCount = 0;
 			int errorCount = 0;
 
-			await foreach (var info in Fsentry.EnumerateAsync(fs.TempDir))
+			foreach (var info in Fsentry.Enumerate(fs.TempDir))
 			{
 				if (info is Fsentry.EnterDir)
 				{
@@ -249,6 +392,7 @@ namespace Tkuri2010.Fsuty.Tests
 		{
 			// ディレクトリやファイルを実際のファイルシステム上に用意
 			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
 				"file0.txt",
 				"dir1 / file1-1.txt",
 				"       file1-2.txt",
@@ -257,13 +401,13 @@ namespace Tkuri2010.Fsuty.Tests
 				"                / dir3-3 / file3-2.txt"
 			);
 
-			var pathSet = new HashSet<string>(fs.GetPropertPaths());
+			var pathSet = new HashSet<string>(fs.GetProperPaths());
 
 			// テスト実行。見つかったディレクトリやファイルを変数 pathSet から消していく
 			// ただし、dir3-1 の中身を無視してみる
 			var skipCount = 0;
 			int loopCount = 0;
-			await foreach (var e in Fsentry.EnumerateAsync(fs.TempDir))
+			foreach (var e in Fsentry.Enumerate(fs.TempDir))
 			{
 				loopCount++;
 
@@ -273,13 +417,13 @@ namespace Tkuri2010.Fsuty.Tests
 					continue;
 				}
 
-				Assert.IsFalse(entry.RelativePath.IsAbsolute);
+				Assert.IsFalse(entry.RelativePath.IsFromRoot);
 
 				var relPathStr = entry.RelativePath.ToString('/');
 
 				if (entry is Fsentry.EnterDir enterDir)
 				{
-					if (relPathStr.Contains("dir3-1"))
+					if (relPathStr.StartsWith("dir3-"))
 					{
 						enterDir.Skip();
 						skipCount++;
@@ -312,6 +456,7 @@ namespace Tkuri2010.Fsuty.Tests
 		public async Task Test_LeaveParentDir2_Async()
 		{
 			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
 				"dir1",
 				"     / file1-1.txt",
 				"dir2",
@@ -329,11 +474,11 @@ namespace Tkuri2010.Fsuty.Tests
 				"     / file3-1.txt"
 			);
 
-			var pathSet = new HashSet<string>(fs.GetPropertPaths());
+			var pathSet = new HashSet<string>(fs.GetProperPaths());
 
 			var leaveParentDirCount = 0;
 
-			await foreach (var e in Fsentry.EnumerateAsync(fs.TempDir))
+			foreach (var e in Fsentry.Enumerate(fs.TempDir))
 			{
 				if (e is Fsentry.EnterDir enterDir)
 				{
@@ -372,9 +517,341 @@ namespace Tkuri2010.Fsuty.Tests
 
 
 		[TestMethod]
+		public async Task Test_EnumOrder_Async()
+		{
+			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
+				"dir1/",
+				"file2.txt",
+				"dir3/",
+				"file4.txt"
+			);
+
+			// dirs then files
+			{
+				var paths = new List<string>();
+
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.DirsThenFiles()))
+				{
+					if (e is Fsentry.EnterDir enterDir)
+					{
+						paths.Add(enterDir.RelativePath.LastItem);
+					}
+					else if (e is Fsentry.File file)
+					{
+						paths.Add(file.RelativePath.LastItem);
+					}
+				}
+
+				Assert.IsTrue(paths[0].StartsWith("dir"));
+				Assert.IsTrue(paths[1].StartsWith("dir"));
+				Assert.IsTrue(paths[2].StartsWith("file"));
+				Assert.IsTrue(paths[3].StartsWith("file"));
+			}
+
+			// files then dirs
+			{
+				var paths = new List<string>();
+
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.FilesThenDirs()))
+				{
+					if (e is Fsentry.EnterDir enterDir)
+					{
+						paths.Add(enterDir.RelativePath.LastItem);
+					}
+					else if (e is Fsentry.File file)
+					{
+						paths.Add(file.RelativePath.LastItem);
+					}
+				}
+
+				Assert.IsTrue(paths[0].StartsWith("file"));
+				Assert.IsTrue(paths[1].StartsWith("file"));
+				Assert.IsTrue(paths[2].StartsWith("dir"));
+				Assert.IsTrue(paths[3].StartsWith("dir"));
+			}
+		}
+
+
+		[TestMethod]
+		public async Task Test_EnumOrder_2_Async()
+		{
+			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
+				"dir1/",
+				"     dir1-1/",
+				"     file1-2.txt",
+				"     dir1-3/",
+				"     file1-4.txt"
+			);
+
+			// dirs then files
+			{
+				var paths = new List<string>();
+
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.DirsThenFiles()))
+				{
+					if (e is Fsentry.EnterDir enterDir)
+					{
+						if (enterDir.RelativePath.LastItem == "dir1")
+						{
+							// ignore
+						}
+						else
+						{
+							paths.Add(enterDir.RelativePath.LastItem);
+						}
+					}
+					else if (e is Fsentry.File file)
+					{
+						paths.Add(file.RelativePath.LastItem);
+					}
+				}
+
+				Assert.IsTrue(paths[0].StartsWith("dir"));
+				Assert.IsTrue(paths[1].StartsWith("dir"));
+				Assert.IsTrue(paths[2].StartsWith("file"));
+				Assert.IsTrue(paths[3].StartsWith("file"));
+			}
+
+			// files then dirs
+			{
+				var paths = new List<string>();
+
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.FilesThenDirs()))
+				{
+					if (e is Fsentry.EnterDir enterDir)
+					{
+						if (enterDir.RelativePath.LastItem == "dir1")
+						{
+							// ignore
+						}
+						else
+						{
+							paths.Add(enterDir.RelativePath.LastItem);
+						}
+					}
+					else if (e is Fsentry.File file)
+					{
+						paths.Add(file.RelativePath.LastItem);
+					}
+				}
+
+				Assert.IsTrue(paths[0].StartsWith("file"));
+				Assert.IsTrue(paths[1].StartsWith("file"));
+				Assert.IsTrue(paths[2].StartsWith("dir"));
+				Assert.IsTrue(paths[3].StartsWith("dir"));
+			}
+		}
+
+
+		[TestMethod]
+		public async Task Test_SearchPattern1_Async()
+		{
+			var dirsFiles = new string[]
+			{
+				"yay_dir1 /",
+				"          yay_dir1-1 /",
+				"          boo_dir1-2 /",
+				"          yay_file1-1.txt",
+				"          boo_file1-2.txt",
+				"boo_dir2 /",
+				"          yay_dir2-1 /",
+				"          yay_file2-1.txt",
+				"yay_file3.txt",
+				"boo_file4.txt",
+			};
+			using var fs = await TempFileSystem.NewAsync(TestContext, dirsFiles);
+
+			var paths = new List<string>();
+			Action<Fsentry.IEntry> add = (entry) =>
+			{
+				if (entry is Fsentry.EnterDir enterDir)
+				{
+					paths.Add(enterDir.RelativePath.LastItem);
+				}
+				else if (entry is Fsentry.File file)
+				{
+					paths.Add(file.RelativePath.LastItem);
+				}
+			};
+
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.NaturalOrder(null)))
+				{
+					add(e);
+				}
+
+				Assert.AreEqual(paths.Count, dirsFiles.Length);
+			}
+
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.NaturalOrder("yay_*")))
+				{
+					add(e);
+				}
+
+				Assert.IsTrue(paths.All(it => it.StartsWith("yay_")));
+				Assert.IsTrue(paths.Any(it => it.Contains("dir")));
+				Assert.IsTrue(paths.Any(it => it.Contains("file")));
+
+				// boo_dir2 must be ignored...
+				Assert.IsTrue(paths.All(it => it != "yay_dir2-1"));
+				Assert.IsTrue(paths.All(it => it != "yay_file2-1.txt"));
+			}
+
+			#region DirsThenFiles
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.DirsThenFiles(null)))
+				{
+					add(e);
+				}
+
+				Assert.AreEqual(paths.Count, dirsFiles.Length);
+			}
+
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.DirsThenFiles("yay_*")))
+				{
+					add(e);
+				}
+
+				Assert.IsTrue(paths.All(it => it.StartsWith("yay_")));
+				Assert.IsTrue(paths.Any(it => it.Contains("dir")));
+				Assert.IsTrue(paths.Any(it => it.Contains("file")));
+
+				// boo_dir2 must be ignored...
+				Assert.IsTrue(paths.All(it => it != "yay_dir2-1"));
+				Assert.IsTrue(paths.All(it => it != "yay_file2-1.txt"));
+			}
+
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.DirsThenFiles(dirPattern: "yay_*")))
+				{
+					add(e);
+				}
+
+				Assert.IsTrue(paths
+						.Where(it => it.Contains("dir"))
+						.All(it => it.StartsWith("yay_")));
+				Assert.IsTrue(paths.Any(it => it.StartsWith("yay_file")));
+				Assert.IsTrue(paths.Any(it => it.StartsWith("boo_file")));
+			}
+
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.DirsThenFiles(filePattern: "yay_*")))
+				{
+					add(e);
+				}
+
+				Assert.IsTrue(paths.Any(it => it.StartsWith("yay_dir")));
+				Assert.IsTrue(paths.Any(it => it.StartsWith("boo_dir")));
+				Assert.IsTrue(paths
+						.Where(it => it.Contains("file"))
+						.All(it => it.StartsWith("yay_")));
+			}
+
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.DirsThenFiles(dirPattern: "yay_*", filePattern: "boo_*")))
+				{
+					add(e);
+				}
+
+				Assert.IsTrue(paths
+						.Where(it => it.Contains("dir"))
+						.All(it => it.StartsWith("yay_")));
+				Assert.IsTrue(paths
+						.Where(it => it.Contains("file"))
+						.All(it => it.StartsWith("boo_")));
+			}
+			#endregion
+
+
+			#region FilesThenDirs
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.FilesThenDirs(null)))
+				{
+					add(e);
+				}
+
+				Assert.AreEqual(paths.Count, dirsFiles.Length);
+			}
+
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.FilesThenDirs("yay_*")))
+				{
+					add(e);
+				}
+
+				Assert.IsTrue(paths.All(it => it.StartsWith("yay_")));
+				Assert.IsTrue(paths.Any(it => it.Contains("dir")));
+				Assert.IsTrue(paths.Any(it => it.Contains("file")));
+
+				// boo_dir2 must be ignored...
+				Assert.IsTrue(paths.All(it => it != "yay_dir2-1"));
+				Assert.IsTrue(paths.All(it => it != "yay_file2-1.txt"));
+			}
+
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.FilesThenDirs(dirPattern: "yay_*")))
+				{
+					add(e);
+				}
+
+				Assert.IsTrue(paths
+						.Where(it => it.Contains("dir"))
+						.All(it => it.StartsWith("yay_")));
+				Assert.IsTrue(paths.Any(it => it.StartsWith("yay_file")));
+				Assert.IsTrue(paths.Any(it => it.StartsWith("boo_file")));
+			}
+
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.FilesThenDirs(filePattern: "yay_*")))
+				{
+					add(e);
+				}
+
+				Assert.IsTrue(paths.Any(it => it.StartsWith("yay_dir")));
+				Assert.IsTrue(paths.Any(it => it.StartsWith("boo_dir")));
+				Assert.IsTrue(paths
+						.Where(it => it.Contains("file"))
+						.All(it => it.StartsWith("yay_")));
+			}
+
+			{
+				paths.Clear();
+				foreach (var e in Fsentry.Enumerate(fs.TempDir, Fsentry.FilesThenDirs(dirPattern: "yay_*", filePattern: "boo_*")))
+				{
+					add(e);
+				}
+
+				Assert.IsTrue(paths
+						.Where(it => it.Contains("dir"))
+						.All(it => it.StartsWith("yay_")));
+				Assert.IsTrue(paths
+						.Where(it => it.Contains("file"))
+						.All(it => it.StartsWith("boo_")));
+			}
+			#endregion
+		}
+
+
+		[TestMethod]
 		public async Task Test99_ErrorHandling_Async()
 		{
 			using var fs = await TempFileSystem.NewAsync(
+				TestContext,
 				"file0.txt",
 				"dir1",
 				"     / dir1-1",
@@ -388,7 +865,7 @@ namespace Tkuri2010.Fsuty.Tests
 			var fileCount = 0;
 			var errorCount = 0;
 
-			await foreach (var entry in Fsentry.EnumerateAsync(fs.TempDir))
+			foreach (var entry in Fsentry.Enumerate(fs.TempDir))
 			{
 				if (entry is Fsentry.EnterDir enterDir)
 				{
