@@ -252,9 +252,9 @@ See [`class_pathprefix.md`](./class_pathprefix.md) for more detail.
 ```
 
 
-### `bool IsAbsolute`
+### `bool IsFromRoot`
 #### Description
-Represents the path means an absolute path or not.
+Represents the path is from root or not.
 
 
 ### `PathItems Items`
@@ -345,20 +345,20 @@ New `Filepath` instance.
 #### Returns
 New `Filepath` instance. 
 #### Description
-Gets a sub path. The returned instance's `Prefix` property is same as the original instance's. The `Items` property has sub sequence of the original instance's one. The `IsAbsolute` property depends on the `start` parameter.
+Gets a sub path. The returned instance's `Prefix` property is same as the original instance's. The `Items` property has sub sequence of the original instance's one. The `IsFromRoot` property depends on the `start` parameter.
 #### Example
-The returned instance's `IsAbsolute` property depends on the `start` parameter.
+The returned instance's `IsFromRoot` property depends on the `start` parameter.
 ```cs
     var original = Filepath.Parse("/root/dir/item");
 
     var sliced0 = original.Slice(0);
     Console.WriteLine( sliced0 ); //=> "/root/dir/item"
-    Console.WriteLine( sliced0.IsAbsolute ); //=> true
+    Console.WriteLine( sliced0.IsFromRoot ); //=> true
 
 
     var sliced1 = original.Slice(1);
     Console.WriteLine( sliced1 );  //=> "dir/item"
-    Console.WriteLine( sliced1.IsAbsolute );  //=> false
+    Console.WriteLine( sliced1.IsFromRoot );  //=> false
 ```
 
 The `start` parameter can take negative integer.
